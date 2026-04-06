@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "植物记录相机",
+    "slug": "plant-recorder",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.plantrecorder.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.plantrecorder.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "植物记录相机需要访问您的相册来选择植物照片。",
+          "cameraPermission": "植物记录相机需要访问您的相机来拍摄植物照片。"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "植物记录相机需要访问您的相机来拍摄植物照片。"
+        }
+      ],
+      [
+        "expo-sqlite"
+      ]
+    ]
+  }
+}
