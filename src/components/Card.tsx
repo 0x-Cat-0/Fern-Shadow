@@ -6,6 +6,7 @@ import {
   Image,
   StyleSheet,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, layout } from '../theme/spacing';
@@ -17,7 +18,7 @@ interface CardProps {
   description?: string;
   subtitle?: string;
   onPress?: () => void;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   showSubtitle?: boolean;
 }
 

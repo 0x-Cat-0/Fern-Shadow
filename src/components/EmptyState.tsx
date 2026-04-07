@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
@@ -8,7 +8,7 @@ interface EmptyStateProps {
   icon?: string;
   title: string;
   message?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function EmptyState({

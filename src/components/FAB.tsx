@@ -4,7 +4,6 @@ import {
   StyleSheet,
   ViewStyle,
   StyleProp,
-  useColorScheme,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { layout } from '../theme/spacing';

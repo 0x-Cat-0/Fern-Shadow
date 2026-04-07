@@ -12,7 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Header, FAB, EmptyState, ConfirmDialog } from '../components';
+import { Header, FAB, EmptyState } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository } from '../database/repositories';
 import { spacing, layout } from '../theme/spacing';
@@ -34,7 +34,6 @@ export default function IndividualDetailScreen() {
   const [records, setRecords] = useState<RecordType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -65,7 +64,12 @@ export default function IndividualDetailScreen() {
     navigation.navigate('CreateRecord', { individualId });
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDateShort = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return `${String(date.getMonth() + 1).padStart(2, '0')}月${String(date.getDate()).padStart(2, '0')}日`;
+  };
+
+  const formatDateFull = (timestamp: number) => {
     const date = new Date(timestamp);
     return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
   };
@@ -77,7 +81,7 @@ export default function IndividualDetailScreen() {
     >
       <View style={styles.dateSection}>
         <Text style={[styles.dateText, { color: colors.textSecondary }]}>
-          {formatDate(item.recordDate)}
+          {formatDateShort(item.recordDate)}
         </Text>
         <View style={[styles.timeline, { backgroundColor: colors.border }]}>
           <View style={[styles.node, { backgroundColor: colors.primary }]} />
@@ -127,6 +131,9 @@ export default function IndividualDetailScreen() {
                 {individual.description}
               </Text>
             ) : null}
+            <Text style={[styles.stats, { color: colors.textDisabled }]}>
+              {records.length} 条记录
+            </Text>
           </View>
         </>
       )}
@@ -219,6 +226,10 @@ const styles = StyleSheet.create({
   description: {
     fontSize: typography.fontSize.base,
     lineHeight: typography.fontSize.base * 1.5,
+  },
+  stats: {
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
   },
   recordsHeader: {
     paddingHorizontal: spacing.md,

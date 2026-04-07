@@ -33,7 +33,7 @@ export class GroupRepository {
     }
 
     const rows = await db.getAllAsync<Group>(
-      `SELECT * FROM \`groups\` ORDER BY ${orderBy}`,
+      `SELECT * FROM \`groups\` ORDER BY ${orderBy}`
     );
     return rows;
   }

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   StatusBar,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
@@ -17,7 +18,7 @@ interface HeaderProps {
   showBack?: boolean;
   onBack?: () => void;
   rightAction?: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Header({
@@ -42,10 +43,7 @@ export function Header({
         style,
       ]}
     >
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={colors.surface}
-      />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
       <View style={styles.content}>
         <View style={styles.leftSection}>
           {showBack && onBack && (

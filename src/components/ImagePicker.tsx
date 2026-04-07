@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../hooks/useTheme';
@@ -18,7 +19,7 @@ interface ImagePickerButtonProps {
   onImageSelected: (uri: string) => void;
   onImageRemoved?: () => void;
   placeholder?: string;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   size?: 'small' | 'normal' | 'large';
 }
 

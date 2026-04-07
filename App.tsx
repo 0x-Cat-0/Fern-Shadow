@@ -17,18 +17,7 @@ import CreateIndividualScreen from './src/screens/CreateIndividualScreen';
 import EditIndividualScreen from './src/screens/EditIndividualScreen';
 import CreateRecordScreen from './src/screens/CreateRecordScreen';
 import EditRecordScreen from './src/screens/EditRecordScreen';
-
-export type RootStackParamList = {
-  Main: undefined;
-  GroupDetail: { groupId: number };
-  IndividualDetail: { individualId: number; groupId: number };
-  CreateGroup: undefined;
-  EditGroup: { groupId: number };
-  CreateIndividual: { groupId: number };
-  EditIndividual: { individualId: number };
-  CreateRecord: { individualId: number };
-  EditRecord: { recordId: number };
-};
+import type { RootStackParamList } from './src/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

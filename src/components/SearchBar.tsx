@@ -6,6 +6,7 @@ import {
   Text,
   StyleSheet,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, layout } from '../theme/spacing';
@@ -16,7 +17,7 @@ interface SearchBarProps {
   onChangeText: (text: string) => void;
   placeholder?: string;
   onSubmit?: () => void;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function SearchBar({
