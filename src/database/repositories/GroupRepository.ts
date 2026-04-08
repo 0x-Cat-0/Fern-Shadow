@@ -1,5 +1,5 @@
 import { getDatabase } from '..';
-import type { Group, CreateGroupDto, UpdateGroupDto, SortType } from '../../types';
+import type { Group, Individual, CreateGroupDto, UpdateGroupDto, SortType } from '../../types';
 
 export class GroupRepository {
   static async create(dto: CreateGroupDto): Promise<number> {
@@ -107,5 +107,76 @@ export class GroupRepository {
       `SELECT COUNT(*) as count FROM \`groups\``
     );
     return row?.count ?? 0;
+  }
+
+  // 添加个体到分组（支持批量添加个体到一个分组，或一个个体添加到多个分组）
+  static async addIndividualsToGroup(groupId: number, individualIds: number[]): Promise<void> {
+    const db = getDatabase();
+    const now = Date.now();
+    for (const individualId of individualIds) {
+      await db.runAsync(
+        `INSERT OR IGNORE INTO \`group_individuals\` (groupId, individualId, createdAt) VALUES (?, ?, ?)`,
+        [groupId, individualId, now]
+      );
+    }
+  }
+
+  // 从分组移除个体
+  static async removeIndividualFromGroup(groupId: number, individualId: number): Promise<void> {
+    const db = getDatabase();
+    await db.runAsync(
+      `DELETE FROM \`group_individuals\` WHERE groupId = ? AND individualId = ?`,
+      [groupId, individualId]
+    );
+  }
+
+  // 获取分组中的所有个体
+  static async getIndividualsInGroup(groupId: number): Promise<Individual[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<Individual>(
+      `SELECT i.* FROM \`individuals\` i
+       INNER JOIN \`group_individuals\` gi ON i.id = gi.individualId
+       WHERE gi.groupId = ?
+       ORDER BY i.id DESC`,
+      [groupId]
+    );
+    return rows;
+  }
+
+  // 获取个体所属的所有分组
+  static async getGroupsForIndividual(individualId: number): Promise<Group[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<Group>(
+      `SELECT g.* FROM \`groups\` g
+       INNER JOIN \`group_individuals\` gi ON g.id = gi.groupId
+       WHERE gi.individualId = ?
+       ORDER BY g.id DESC`,
+      [individualId]
+    );
+    return rows;
+  }
+
+  // 检查个体是否在分组中
+  static async isIndividualInGroup(groupId: number, individualId: number): Promise<boolean> {
+    const db = getDatabase();
+    const row = await db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM \`group_individuals\` WHERE groupId = ? AND individualId = ?`,
+      [groupId, individualId]
+    );
+    return (row?.count ?? 0) > 0;
+  }
+
+  // 在分组内搜索个体
+  static async searchIndividualsInGroup(groupId: number, query: string): Promise<Individual[]> {
+    const db = getDatabase();
+    const searchPattern = `%${query}%`;
+    const rows = await db.getAllAsync<Individual>(
+      `SELECT i.* FROM \`individuals\` i
+       INNER JOIN \`group_individuals\` gi ON i.id = gi.individualId
+       WHERE gi.groupId = ? AND (i.title LIKE ? OR i.description LIKE ?)
+       ORDER BY i.id DESC`,
+      [groupId, searchPattern, searchPattern]
+    );
+    return rows;
   }
 }

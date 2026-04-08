@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ViewStyle,
   StyleProp,
+  Image,
 } from 'react-native';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, layout } from '../theme/spacing';
@@ -37,7 +38,7 @@ export function SearchBar({
         style,
       ]}
     >
-      <Text style={[styles.icon, { color: colors.textDisabled }]}>🔍</Text>
+      <Image source={require('../assets/icons/搜索.png')} style={styles.icon} />
       <TextInput
         style={[styles.input, { color: colors.textPrimary }]}
         value={value}
@@ -69,7 +70,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   icon: {
-    fontSize: 14,
+    width: 16,
+    height: 16,
     marginRight: spacing.xs,
   },
   input: {

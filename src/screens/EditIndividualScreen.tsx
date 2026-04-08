@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Header, ImagePickerButton, ConfirmDialog } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository } from '../database/repositories';
+import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { Individual, RootStackParamList } from '../types';
@@ -34,6 +35,7 @@ export default function EditIndividualScreen() {
 
   const [individual, setIndividual] = useState<Individual | null>(null);
   const [coverImagePath, setCoverImagePath] = useState('');
+  const [originalCoverImagePath, setOriginalCoverImagePath] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,6 +48,7 @@ export default function EditIndividualScreen() {
       if (data) {
         setIndividual(data);
         setCoverImagePath(data.coverImagePath);
+        setOriginalCoverImagePath(data.coverImagePath);
         setTitle(data.title);
         setDescription(data.description);
       }
@@ -61,8 +64,14 @@ export default function EditIndividualScreen() {
 
     setSaving(true);
     try {
+      // 如果图片改变了，复制到文档目录
+      let finalCoverPath = originalCoverImagePath;
+      if (coverImagePath !== originalCoverImagePath) {
+        finalCoverPath = await copyImageToDocumentDirectory(coverImagePath);
+      }
+
       await IndividualRepository.update(individualId, {
-        coverImagePath,
+        coverImagePath: finalCoverPath,
         title: title.trim(),
         description: description.trim(),
       });
@@ -77,7 +86,7 @@ export default function EditIndividualScreen() {
   const handleDelete = async () => {
     try {
       await IndividualRepository.delete(individualId);
-      navigation.navigate('Main');
+      navigation.navigate('MainHome');
     } catch (error) {
       console.error('Failed to delete individual:', error);
     }

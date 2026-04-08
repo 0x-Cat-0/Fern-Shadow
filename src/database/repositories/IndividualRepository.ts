@@ -6,9 +6,9 @@ export class IndividualRepository {
     const db = getDatabase();
     const now = Date.now();
     const result = await db.runAsync(
-      `INSERT INTO \`individuals\` (groupId, coverImagePath, title, description, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [dto.groupId, dto.coverImagePath, dto.title, dto.description, now, now]
+      `INSERT INTO \`individuals\` (coverImagePath, title, description, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?)`,
+      [dto.coverImagePath, dto.title, dto.description, now, now]
     );
     return result.lastInsertRowId;
   }
@@ -22,38 +22,31 @@ export class IndividualRepository {
     return row ?? null;
   }
 
-  static async findByGroupId(groupId: number): Promise<Individual[]> {
+  static async findAll(): Promise<Individual[]> {
     const db = getDatabase();
     const rows = await db.getAllAsync<Individual>(
-      `SELECT * FROM \`individuals\` WHERE groupId = ? ORDER BY id DESC`,
-      [groupId]
+      `SELECT * FROM \`individuals\` ORDER BY id DESC`
     );
     return rows;
   }
 
-  static async search(query: string, groupId?: number): Promise<Individual[]> {
+  static async search(query: string): Promise<Individual[]> {
     const db = getDatabase();
     const searchPattern = `%${query}%`;
 
-    let sql = `SELECT * FROM \`individuals\`
-               WHERE (title LIKE ? OR description LIKE ?)`;
-    const params: (string | number)[] = [searchPattern, searchPattern];
-
-    if (groupId !== undefined) {
-      sql += ` AND groupId = ?`;
-      params.push(groupId);
-    }
-
-    sql += ` ORDER BY id DESC`;
-
-    const rows = await db.getAllAsync<Individual>(sql, params);
+    const rows = await db.getAllAsync<Individual>(
+      `SELECT * FROM \`individuals\`
+       WHERE title LIKE ? OR description LIKE ?
+       ORDER BY id DESC`,
+      [searchPattern, searchPattern]
+    );
     return rows;
   }
 
   static async update(id: number, dto: UpdateIndividualDto): Promise<void> {
     const db = getDatabase();
     const sets: string[] = [];
-    const values: (string | number)[] = [];
+    const values: (string | number | null)[] = [];
 
     if (dto.coverImagePath !== undefined) {
       sets.push('coverImagePath = ?');
@@ -85,12 +78,19 @@ export class IndividualRepository {
     await db.runAsync(`DELETE FROM \`individuals\` WHERE id = ?`, [id]);
   }
 
-  static async getCountByGroupId(groupId: number): Promise<number> {
+  static async getCount(): Promise<number> {
     const db = getDatabase();
     const row = await db.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM \`individuals\` WHERE groupId = ?`,
-      [groupId]
+      `SELECT COUNT(*) as count FROM \`individuals\``
     );
     return row?.count ?? 0;
+  }
+
+  static async incrementViewCount(id: number): Promise<void> {
+    const db = getDatabase();
+    await db.runAsync(
+      `UPDATE \`individuals\` SET viewCount = viewCount + 1, updatedAt = ? WHERE id = ?`,
+      [Date.now(), id]
+    );
   }
 }

@@ -5,10 +5,14 @@ export class RecordRepository {
   static async create(dto: CreateRecordDto): Promise<number> {
     const db = getDatabase();
     const now = Date.now();
+    // imagePath 可以是字符串或字符串数组，数组时序列化为 JSON
+    const imagePath = Array.isArray(dto.imagePath)
+      ? JSON.stringify(dto.imagePath)
+      : dto.imagePath;
     const result = await db.runAsync(
       `INSERT INTO \`records\` (individualId, imagePath, title, description, recordDate, createdAt)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [dto.individualId, dto.imagePath, dto.title, dto.description, dto.recordDate, now]
+      [dto.individualId, imagePath, dto.title, dto.description, dto.recordDate, now]
     );
     return result.lastInsertRowId;
   }
@@ -19,6 +23,14 @@ export class RecordRepository {
       `SELECT * FROM \`records\` WHERE id = ?`,
       [id]
     );
+    if (row) {
+      // 解析 imagePath JSON 数组
+      try {
+        row.imagePath = JSON.parse(row.imagePath as unknown as string);
+      } catch {
+        // 保持原样
+      }
+    }
     return row ?? null;
   }
 
@@ -28,7 +40,15 @@ export class RecordRepository {
       `SELECT * FROM \`records\` WHERE individualId = ? ORDER BY recordDate DESC, id DESC`,
       [individualId]
     );
-    return rows;
+    // 解析每行的 imagePath JSON 数组
+    return rows.map(row => {
+      try {
+        row.imagePath = JSON.parse(row.imagePath as unknown as string);
+      } catch {
+        // 保持原样
+      }
+      return row;
+    });
   }
 
   static async search(query: string, individualId?: number): Promise<Record[]> {
@@ -57,7 +77,11 @@ export class RecordRepository {
 
     if (dto.imagePath !== undefined) {
       sets.push('imagePath = ?');
-      values.push(dto.imagePath);
+      // imagePath 可能是字符串或字符串数组，数组时序列化为 JSON
+      const imagePath = Array.isArray(dto.imagePath)
+        ? JSON.stringify(dto.imagePath)
+        : dto.imagePath;
+      values.push(imagePath);
     }
     if (dto.title !== undefined) {
       sets.push('title = ?');

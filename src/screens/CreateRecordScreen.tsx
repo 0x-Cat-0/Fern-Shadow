@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Header, ImagePickerButton } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository } from '../database/repositories';
+import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { Individual, RootStackParamList } from '../types';
@@ -58,9 +59,12 @@ export default function CreateRecordScreen() {
 
     setSaving(true);
     try {
+      // 将图片复制到文档目录，获取永久 URI
+      const permanentUri = await copyImageToDocumentDirectory(imagePath);
+
       await RecordRepository.create({
         individualId,
-        imagePath,
+        imagePath: permanentUri,
         title: title.trim(),
         description: description.trim(),
         recordDate: recordDate.getTime(),

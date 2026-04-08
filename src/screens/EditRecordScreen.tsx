@@ -18,6 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Header, ImagePickerButton, ConfirmDialog } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { RecordRepository } from '../database/repositories';
+import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { Record as RecordType, RootStackParamList } from '../types';
@@ -35,6 +36,7 @@ export default function EditRecordScreen() {
 
   const [record, setRecord] = useState<RecordType | null>(null);
   const [imagePath, setImagePath] = useState('');
+  const [originalImagePath, setOriginalImagePath] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [recordDate, setRecordDate] = useState(new Date());
@@ -48,7 +50,10 @@ export default function EditRecordScreen() {
       const data = await RecordRepository.findById(recordId);
       if (data) {
         setRecord(data);
-        setImagePath(data.imagePath);
+        // imagePath 可能是字符串或数组，取第一个元素
+        const path = Array.isArray(data.imagePath) ? data.imagePath[0] : data.imagePath;
+        setImagePath(path || '');
+        setOriginalImagePath(path || '');
         setTitle(data.title);
         setDescription(data.description);
         setRecordDate(new Date(data.recordDate));
@@ -65,8 +70,14 @@ export default function EditRecordScreen() {
 
     setSaving(true);
     try {
+      // 如果图片改变了，复制到文档目录
+      let finalImagePath = originalImagePath;
+      if (imagePath !== originalImagePath) {
+        finalImagePath = await copyImageToDocumentDirectory(imagePath);
+      }
+
       await RecordRepository.update(recordId, {
-        imagePath,
+        imagePath: finalImagePath,
         title: title.trim(),
         description: description.trim(),
         recordDate: recordDate.getTime(),
