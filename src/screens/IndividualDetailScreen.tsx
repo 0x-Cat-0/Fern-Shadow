@@ -14,7 +14,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -135,9 +135,11 @@ export default function IndividualDetailScreen() {
   // 是否有今天的记录
   const [hasTodayRecord, setHasTodayRecord] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   // 当图片索引改变时，滚动到对应位置
   useEffect(() => {
@@ -861,8 +863,8 @@ export default function IndividualDetailScreen() {
         <Text style={[styles.topTitle, { color: '#333333' }]} numberOfLines={1}>
           {individual?.title}
         </Text>
-        <TouchableOpacity style={styles.moreBtn} onPress={handleOpenAddToGroup}>
-          <Text style={{ fontSize: 20, color: '#333333', fontWeight: '300' }}>+</Text>
+        <TouchableOpacity style={styles.moreBtn} onPress={() => navigation.navigate('EditIndividual', { individualId })}>
+          <Image source={require('../assets/icons/编辑.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
       </View>
 

@@ -11,7 +11,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -76,9 +76,11 @@ export default function GroupDetailScreen() {
     }
   }, [groupId, searchQuery]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -107,19 +109,33 @@ export default function GroupDetailScreen() {
 
   // 确认添加个体到分组
   const handleConfirmAdd = async () => {
-    if (selectedIndividualIds.length === 0) {
-      Alert.alert('提示', '请选择至少一个个体');
-      return;
-    }
     setAddingToGroup(true);
     try {
-      await GroupRepository.addIndividualsToGroup(groupId, selectedIndividualIds);
+      // 获取当前分组中的所有个体ID
+      const currentInGroup = await GroupRepository.getIndividualsInGroup(groupId);
+      const currentIds = currentInGroup.map(i => i.id);
+
+      // 需要添加的（选中但不在分组中的）
+      const toAdd = selectedIndividualIds.filter(id => !currentIds.includes(id));
+
+      // 需要移除的（在分组中但未选中的）
+      const toRemove = currentIds.filter(id => !selectedIndividualIds.includes(id));
+
+      // 执行添加
+      if (toAdd.length > 0) {
+        await GroupRepository.addIndividualsToGroup(groupId, toAdd);
+      }
+
+      // 执行移除
+      for (const id of toRemove) {
+        await GroupRepository.removeIndividualFromGroup(groupId, id);
+      }
+
       setShowAddModal(false);
       loadData();
-      Alert.alert('成功', `已添加 ${selectedIndividualIds.length} 个个体到分组`);
     } catch (error) {
-      console.error('Failed to add individuals:', error);
-      Alert.alert('错误', '添加个体失败');
+      console.error('Failed to update individuals:', error);
+      Alert.alert('错误', '更新个体失败');
     } finally {
       setAddingToGroup(false);
     }
@@ -135,8 +151,9 @@ export default function GroupDetailScreen() {
   };
 
   const handleCardPress = (item: Individual) => {
-    // 如果该项已选中，不导航（让按钮处理）
+    // 如果该项已选中，取消选择
     if (selectedIndividualId === item.id) {
+      setSelectedIndividualId(null);
       return;
     }
     navigation.navigate('IndividualDetail', { individualId: item.id });
@@ -225,7 +242,7 @@ export default function GroupDetailScreen() {
           onPress={() => navigation.navigate('EditGroup', { groupId })}
           style={stylesDetail.editBtn}
         >
-          <Text style={{ fontSize: 16, color: colors.primary }}>编辑</Text>
+          <Image source={require('../assets/icons/编辑.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
       </View>
 
@@ -304,7 +321,6 @@ export default function GroupDetailScreen() {
                       onPress={() => handleCardPress(item)}
                       onLongPress={() => setSelectedIndividualId(item.id)}
                       activeOpacity={0.8}
-                      disabled={selectedIndividualId === item.id}
                     >
                       <Image
                         source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
@@ -326,8 +342,8 @@ export default function GroupDetailScreen() {
                         style={[stylesDetail.cardActionOverlay, stylesDetail.cardActionOverlayAbsolute]}
                         pointerEvents="box-none"
                       >
-                        <View style={stylesDetail.cardActionOverlayBg} />
-                        <View style={stylesDetail.cardActionBtns}>
+                        <View style={stylesDetail.cardActionOverlayBg} pointerEvents="none" />
+                        <View style={stylesDetail.cardActionBtns} pointerEvents="box-none">
                           <TouchableOpacity
                             style={stylesDetail.cardActionBtn}
                             onPress={() => {
@@ -364,11 +380,24 @@ export default function GroupDetailScreen() {
       <Modal
         visible={showAddModal}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => {
+          handleConfirmAdd();
+        }}
       >
-        <View style={stylesDetail.modalOverlay}>
-          <View style={[stylesDetail.modalContent, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 20 }]}>
+        <TouchableOpacity
+          style={stylesDetail.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            handleConfirmAdd();
+          }}
+        >
+          <TouchableOpacity
+            style={[stylesDetail.modalContent, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 20 }]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
             <View style={stylesDetail.modalHeader}>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Text style={[stylesDetail.modalCancel, { color: colors.textDisabled }]}>取消</Text>
@@ -414,8 +443,8 @@ export default function GroupDetailScreen() {
                 ))
               )}
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -545,6 +574,14 @@ const stylesDetail = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 1,
+  },
+  deselectOverlayInside: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
   },
   cardSelected: {
     shadowColor: '#000',

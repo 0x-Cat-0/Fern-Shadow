@@ -6,8 +6,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
+  Image,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,11 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
-import { GroupRepository } from '../database/repositories';
+import { GroupRepository, IndividualRepository } from '../database/repositories';
 import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
-import { spacing, layout } from '../theme/spacing';
-import { typography } from '../theme/typography';
-import type { RootStackParamList } from '../types';
+import type { RootStackParamList, Individual } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateGroup'>;
 
@@ -31,7 +32,11 @@ export default function CreateGroupScreen() {
   const [coverImagePath, setCoverImagePath] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [selectedIndividualIds, setSelectedIndividualIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [showIndividualPicker, setShowIndividualPicker] = useState(false);
+  const [individuals, setIndividuals] = useState<Individual[]>([]);
 
   const requestPermission = async (type: 'camera' | 'library') => {
     if (type === 'camera') {
@@ -73,11 +78,21 @@ export default function CreateGroupScreen() {
   };
 
   const showImageOptions = () => {
-    Alert.alert('选择图片', '请选择图片来源', [
-      { text: '拍照', onPress: () => pickImage('camera') },
-      { text: '从相册选择', onPress: () => pickImage('library') },
-      { text: '取消', style: 'cancel' },
-    ]);
+    setShowImageModal(true);
+  };
+
+  const loadIndividuals = async () => {
+    try {
+      const data = await IndividualRepository.findAll();
+      setIndividuals(data);
+    } catch (error) {
+      console.error('Failed to load individuals:', error);
+    }
+  };
+
+  const handleShowIndividualPicker = () => {
+    loadIndividuals();
+    setShowIndividualPicker(true);
   };
 
   const handleSave = async () => {
@@ -88,17 +103,24 @@ export default function CreateGroupScreen() {
 
     setSaving(true);
     try {
-      // 将图片复制到文档目录，获取永久 URI
       const permanentUri = coverImagePath
         ? await copyImageToDocumentDirectory(coverImagePath)
         : 'https://picsum.photos/400/400';
 
-      await GroupRepository.create({
+      // 创建分组并获取新分组ID
+      const newGroupId = await GroupRepository.create({
         coverImagePath: permanentUri,
         title: title.trim(),
         description: description.trim(),
       });
-      navigation.goBack();
+
+      // 如果选择了植物，添加到分组
+      if (selectedIndividualIds.length > 0) {
+        await GroupRepository.addIndividualsToGroup(newGroupId, selectedIndividualIds);
+      }
+
+      // 跳转到新创建的分组详情页
+      navigation.replace('GroupDetail', { groupId: newGroupId });
     } catch (error) {
       console.error('Failed to create group:', error);
       Alert.alert('错误', '创建分组失败');
@@ -110,84 +132,181 @@ export default function CreateGroupScreen() {
   const canSave = title.trim() && !saving;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
       {/* 顶部安全区域 */}
-      <View style={{ height: insets.top, backgroundColor: colors.surface }} />
+      <View style={{ height: insets.top, backgroundColor: '#ffffff' }} />
       {/* 顶部导航栏 */}
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={{ fontSize: 22, color: colors.textPrimary }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>创建分组</Text>
-        <TouchableOpacity onPress={handleSave} disabled={!canSave}>
-          <Text style={[styles.saveBtn, { color: canSave ? colors.primary : colors.textDisabled }]}>
-            保存
-          </Text>
-        </TouchableOpacity>
+        <View style={{ width: 50 }} />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* 封面图 */}
-        <TouchableOpacity style={styles.coverSection} onPress={showImageOptions}>
-          {coverImagePath ? (
-            <Image source={{ uri: coverImagePath }} style={styles.coverImage} resizeMode="cover" />
-          ) : (
-            <View style={[styles.coverPlaceholder, { backgroundColor: '#e0e0e0' }]}>
-              <Text style={styles.coverIcon}>📷</Text>
-              <Text style={[styles.coverHint, { color: '#999' }]}>点击选择图片</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: insets.bottom + 80 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 封面图 */}
+          <TouchableOpacity style={styles.imageSection} onPress={showImageOptions}>
+            {coverImagePath ? (
+              <Image source={{ uri: coverImagePath }} style={styles.coverImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <Text style={styles.coverPlaceholderText}>+</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        {/* 表单 */}
-        <View style={styles.form}>
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>
-              标题 <Text style={{ color: colors.primary }}>*</Text>
-            </Text>
+          {/* 标题输入 */}
+          <View style={styles.inputSection}>
             <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={styles.titleInput}
               value={title}
               onChangeText={setTitle}
-              placeholder="请输入分组标题"
+              placeholder="添加标题"
               placeholderTextColor={colors.textDisabled}
               maxLength={50}
             />
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.textPrimary }]}>描述</Text>
+          {/* 描述输入 */}
+          <View style={styles.inputSection}>
             <TextInput
-              style={[
-                styles.textArea,
-                {
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={styles.descInput}
               value={description}
               onChangeText={setDescription}
-              placeholder="请输入分组描述"
+              placeholder="添加正文或发语音"
               placeholderTextColor={colors.textDisabled}
               multiline
-              numberOfLines={4}
-              maxLength={200}
+              maxLength={500}
             />
           </View>
-        </View>
-      </ScrollView>
+
+          {/* 分割线 */}
+          <View style={styles.separator} />
+
+          {/* 选择植物 */}
+          <TouchableOpacity
+            style={styles.optionItem}
+            onPress={handleShowIndividualPicker}
+          >
+            <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>选择植物</Text>
+            <View style={styles.optionRight}>
+              <Text style={[styles.optionValue, { color: selectedIndividualIds.length > 0 ? colors.textPrimary : colors.textDisabled }]}>
+                {selectedIndividualIds.length > 0 ? `已选择 ${selectedIndividualIds.length} 个植物` : '请选择（可选）'}
+              </Text>
+              <Text style={{ color: colors.textDisabled, fontSize: 18 }}> ›</Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* 底部操作按钮 */}
+      <View style={[styles.bottomActions, { backgroundColor: '#ffffff', paddingBottom: insets.bottom + 12 }]}>
+        <TouchableOpacity
+          style={styles.cancelBtn}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.cancelBtnText}>取消</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.saveBtnPrimary}
+          onPress={handleSave}
+          disabled={!canSave}
+        >
+          <Text style={styles.saveBtnPrimaryText}>保存</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* 选择图片弹窗 */}
+      <Modal
+        visible={showImageModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowImageModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageModal(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity style={styles.modalBtn} onPress={() => { setShowImageModal(false); pickImage('camera'); }}>
+              <Text style={styles.modalBtnText}>拍照</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalBtn} onPress={() => { setShowImageModal(false); pickImage('library'); }}>
+              <Text style={styles.modalBtnText}>从相册选择</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnLast]} onPress={() => setShowImageModal(false)}>
+              <Text style={styles.modalBtnText}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 选择植物弹窗 */}
+      <Modal
+        visible={showIndividualPicker}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowIndividualPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIndividualPicker(false)}
+        >
+          <TouchableOpacity
+            style={[styles.modalContent, { backgroundColor: colors.surface }]}
+            activeOpacity={1}
+            onPress={() => {
+              // Delay to allow button selections to complete first
+              setTimeout(() => setShowIndividualPicker(false), 100);
+            }}
+          >
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>选择植物</Text>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={() => setSelectedIndividualIds([])}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>
+                不选择任何植物
+              </Text>
+              {selectedIndividualIds.length === 0 && <Text style={styles.checkmark}>✓</Text>}
+            </TouchableOpacity>
+            {individuals.map(individual => (
+              <TouchableOpacity
+                key={individual.id}
+                style={styles.modalBtn}
+                onPress={() => {
+                  setSelectedIndividualIds(prev =>
+                    prev.includes(individual.id)
+                      ? prev.filter(id => id !== individual.id)
+                      : [...prev, individual.id]
+                  );
+                }}
+              >
+                <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>{individual.title}</Text>
+                {selectedIndividualIds.includes(individual.id) && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnLast]} onPress={() => setShowIndividualPicker(false)}>
+              <Text style={[styles.modalBtnText, { color: colors.primary }]}>确定</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -195,15 +314,21 @@ export default function CreateGroupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  flex: {
+    flex: 1,
   },
   header: {
-    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
+    paddingBottom: 8,
+    paddingTop: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
   },
   backBtn: {
     width: 32,
@@ -215,61 +340,142 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  saveBtn: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
   content: {
     flex: 1,
   },
-  coverSection: {
-    width: '100%',
-    backgroundColor: '#e0e0e0',
-    alignItems: 'center',
-    justifyContent: 'center',
+  imageSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
   },
   coverImage: {
     width: '100%',
     aspectRatio: 16 / 9,
+    borderRadius: 8,
   },
   coverPlaceholder: {
-    width: '100%',
-    aspectRatio: 16 / 9,
+    width: 80,
+    height: 80,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coverIcon: {
+  coverPlaceholderText: {
     fontSize: 48,
-    marginBottom: 8,
+    color: '#999',
+    fontWeight: '300',
   },
-  coverHint: {
-    fontSize: 14,
+  inputSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  form: {
-    padding: 16,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  input: {
-    height: 44,
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 14,
-  },
-  textArea: {
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+  titleInput: {
+    fontSize: 18,
+    fontWeight: '600',
     paddingVertical: 12,
-    fontSize: 14,
+    color: '#333333',
+  },
+  descInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    paddingVertical: 8,
     minHeight: 100,
     textAlignVertical: 'top',
+    color: '#333333',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+  },
+  optionLabel: {
+    fontSize: 15,
+  },
+  optionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionValue: {
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalBtn: {
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalBtnLast: {
+    borderBottomWidth: 0,
+  },
+  modalBtnText: {
+    fontSize: 16,
+    color: '#999999',
+  },
+  checkmark: {
+    position: 'absolute',
+    right: 16,
+    fontSize: 18,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333333',
+  },
+  saveBtnPrimary: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#ff4757',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveBtnPrimaryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#ffffff',
   },
 });

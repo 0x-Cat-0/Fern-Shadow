@@ -70,7 +70,9 @@ function WaterfallCard({
   };
 
   const handleCardPress = () => {
-    if (!isSelected) {
+    if (isSelected) {
+      onDeselect?.();
+    } else {
       navigation.navigate('IndividualDetail', { individualId: item.id });
     }
   };
@@ -110,22 +112,31 @@ function WaterfallCard({
 
       {/* 编辑/删除按钮 - 独立于卡片 */}
       {isSelected && (
-        <View style={[styles.cardActionOverlay, styles.cardActionOverlayAbsolute]}>
-          <TouchableOpacity
-            style={styles.cardActionOverlayBg}
-            activeOpacity={1}
-            onPress={onDeselect}
-          />
+        <View
+          style={[styles.cardActionOverlay, styles.cardActionOverlayAbsolute]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.cardActionOverlayBg} pointerEvents="none" />
           <View style={styles.cardActionBtns}>
             <TouchableOpacity
               style={styles.cardActionBtn}
-              onPress={onEdit}
+              onPress={() => {
+                console.log('WaterfallCard Edit button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
+                onEdit?.();
+              }}
+              onPressIn={() => console.log('WaterfallCard Edit onPressIn')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[styles.cardActionBtnText, { color: '#666666' }]}>编辑</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.cardActionBtn}
-              onPress={onDelete}
+              onPress={() => {
+                console.log('WaterfallCard Delete button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
+                onDelete?.();
+              }}
+              onPressIn={() => console.log('WaterfallCard Delete onPressIn')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[styles.cardActionBtnText, { color: '#FF4040' }]}>删除</Text>
             </TouchableOpacity>
@@ -175,14 +186,6 @@ function IndividualsView({
 
   return (
     <View style={styles.flex}>
-      {/* 取消选择遮罩 */}
-      {selectedId && (
-        <TouchableOpacity
-          style={styles.deselectOverlay}
-          activeOpacity={1}
-          onPress={() => onSelectItem(null)}
-        />
-      )}
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
@@ -190,6 +193,14 @@ function IndividualsView({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* 取消选择遮罩 - 只覆盖空白区域，zIndex 低于按钮 */}
+        {selectedId && (
+          <TouchableOpacity
+            style={styles.deselectOverlayInside}
+            activeOpacity={1}
+            onPress={() => onSelectItem(null)}
+          />
+        )}
         <View style={[styles.waterfallContainer, { paddingHorizontal: spacing.md }]}>
           <View style={styles.waterfallColumn}>
             {leftColumn.map(item => (
@@ -255,16 +266,28 @@ function GroupsView({
   const itemHeight = itemWidth + 40; // 图片 + 内容高度
 
   const handleCardPress = (item: Group) => {
-    // 如果该项已选中，不导航（让按钮处理）
+    // 如果该项已选中，取消选择
     if (selectedId === item.id) {
+      onSelectItem(null);
       return;
     }
     navigation.navigate('GroupDetail', { groupId: item.id });
   };
 
-  const rows: Group[][] = [];
+  const rows: (Group | 'add')[][] = [];
   for (let i = 0; i < groups.length; i += numColumns) {
-    rows.push(groups.slice(i, i + numColumns));
+    const row: (Group | 'add')[] = groups.slice(i, i + numColumns) as (Group | 'add')[];
+    rows.push(row);
+  }
+  // 在最后一行添加 'add'，但如果最后一行已满则另起一行
+  if (rows.length > 0) {
+    const lastRow = rows[rows.length - 1];
+    if (lastRow.length < numColumns) {
+      lastRow.push('add' as const);
+    } else {
+      // 最后一行已满，添加新行放置 'add'
+      rows.push(['add' as const]);
+    }
   }
 
   const handleCreateGroup = () => {
@@ -283,24 +306,46 @@ function GroupsView({
         <View style={[styles.gridContainer, { paddingHorizontal: containerPadding }]}>
           {rows.map((row, rowIndex) => (
             <View key={rowIndex} style={styles.gridRow}>
-              {row.map((item, colIndex) => (
+              {row.map((item, colIndex) => {
+                // 添加按钮
+                if (item === 'add') {
+                  return (
+                    <TouchableOpacity
+                      key="add-btn"
+                      style={[
+                        styles.gridAddBtn,
+                        { width: itemWidth, height: itemHeight },
+                        colIndex < numColumns - 1 && { marginRight: gap },
+                      ]}
+                      onPress={handleCreateGroup}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.gridAddBtnText}>+</Text>
+                    </TouchableOpacity>
+                  );
+                }
+                // 分组卡片
+                return (
                 <View
                   key={item.id}
                   style={[
                     styles.gridCardWrapper,
                     { width: itemWidth, height: itemHeight },
                     colIndex < numColumns - 1 && { marginRight: gap },
+                    selectedId === item.id && styles.cardSelected,
                   ]}
                 >
                   <TouchableOpacity
-                    style={[
-                      styles.gridCard,
-                      selectedId === item.id && styles.cardSelected,
-                    ]}
-                    onPress={() => handleCardPress(item)}
-                    onLongPress={() => onSelectItem(item.id)}
+                    style={styles.gridCard}
+                    onPress={() => {
+                      console.log('GroupsView Card onPress, item.id:', item.id, 'selectedId:', selectedId, 'disabled:', selectedId === item.id);
+                      handleCardPress(item);
+                    }}
+                    onLongPress={() => {
+                      console.log('GroupsView Card onLongPress, item.id:', item.id);
+                      onSelectItem(item.id);
+                    }}
                     activeOpacity={0.8}
-                    disabled={selectedId === item.id}
                   >
                     <Image
                       source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
@@ -320,14 +365,13 @@ function GroupsView({
                   {selectedId === item.id && (
                     <View
                       style={[styles.cardActionOverlay, styles.cardActionOverlayAbsolute]}
-                      pointerEvents="box-none"
                     >
-                      <View style={styles.cardActionOverlayBg} />
+                      <View style={styles.cardActionOverlayBg} pointerEvents="none" />
                       <View style={styles.cardActionBtns}>
                         <TouchableOpacity
                           style={styles.cardActionBtn}
                           onPress={() => {
-                            // console.log('Edit button pressed for item:', item.id);
+                            console.log('GroupsView Edit button PRESSED, item.id:', item.id, 'selectedId:', selectedId);
                             onEditItem(item);
                           }}
                         >
@@ -336,7 +380,7 @@ function GroupsView({
                         <TouchableOpacity
                           style={styles.cardActionBtn}
                           onPress={() => {
-                            // console.log('Delete button pressed for item:', item.id);
+                            console.log('GroupsView Delete button PRESSED, item.id:', item.id, 'selectedId:', selectedId);
                             onDeleteItem(item);
                           }}
                         >
@@ -346,25 +390,24 @@ function GroupsView({
                     </View>
                   )}
                 </View>
-              ))}
+                );
+              })}
+              {/* 补齐空白 */}
               {row.length < numColumns &&
                 Array.from({ length: numColumns - row.length }).map((_, i) => (
                   <View key={`placeholder-${i}`} style={[styles.gridCardPlaceholder, { width: itemWidth, height: itemHeight }]} />
                 ))}
             </View>
           ))}
-          <View style={styles.gridRow}>
-            <TouchableOpacity
-              style={[styles.gridAddBtn, { width: itemWidth, height: itemHeight }]}
-              onPress={handleCreateGroup}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.gridAddBtnText}>+</Text>
-            </TouchableOpacity>
-            <View style={[styles.gridCardPlaceholder, { width: itemWidth, height: itemHeight }]} />
-            <View style={[styles.gridCardPlaceholder, { width: itemWidth, height: itemHeight }]} />
-          </View>
         </View>
+        {/* 取消选择遮罩 - 放在内容之后渲染，使其在触摸事件处理顺序中更靠后 */}
+        {selectedId && (
+          <TouchableOpacity
+            style={styles.deselectOverlayInside}
+            activeOpacity={1}
+            onPress={() => onSelectItem(null)}
+          />
+        )}
       </ScrollView>
     </View>
   );
@@ -576,6 +619,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 1,
   },
+  deselectOverlayInside: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+  },
+  deselectBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    backgroundColor: 'transparent',
+  },
   header: {
     backgroundColor: '#ffffff',
   },
@@ -699,7 +759,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardActionOverlayAbsolute: {
-    zIndex: 10,
+    zIndex: 15,
   },
   cardActionOverlayBg: {
     position: 'absolute',
@@ -786,6 +846,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   gridAddBtnText: {
     fontSize: 32,

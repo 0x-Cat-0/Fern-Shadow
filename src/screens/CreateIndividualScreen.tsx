@@ -90,24 +90,17 @@ export default function CreateIndividualScreen() {
 
   const getImageCreationTime = (asset: ImagePicker.ImagePickerAsset): number | null => {
     let timestamp: number | null = null;
-
-    // Cast to any to access runtime properties not in type definition
     const assetAny = asset as any;
 
-    // Try direct creationTime first (newer versions of expo-image-picker)
     if (assetAny.creationTime) {
       timestamp = assetAny.creationTime;
-    }
-    // Try EXIF DateTimeOriginal
-    else if (assetAny.exif && assetAny.exif.DateTimeOriginal) {
+    } else if (assetAny.exif && assetAny.exif.DateTimeOriginal) {
       const dateStr = assetAny.exif.DateTimeOriginal as string;
       const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
       if (!isNaN(parsed.getTime())) {
         timestamp = parsed.getTime();
       }
-    }
-    // Try EXIF DateTime
-    else if (assetAny.exif && assetAny.exif.DateTime) {
+    } else if (assetAny.exif && assetAny.exif.DateTime) {
       const dateStr = assetAny.exif.DateTime as string;
       const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
       if (!isNaN(parsed.getTime())) {
@@ -115,19 +108,13 @@ export default function CreateIndividualScreen() {
       }
     }
 
-    if (timestamp === null) {
-      return null;
-    }
+    if (timestamp === null) return null;
 
-    // Check if timestamp is in seconds (Unix timestamp) rather than milliseconds
-    // If the resulting date is before 2020, it's likely in seconds
     const date = new Date(timestamp);
     if (date.getFullYear() < 2020) {
-      // Convert from seconds to milliseconds
       timestamp = timestamp * 1000;
     }
 
-    // Final validation - should be between 2020 and 2100
     const finalDate = new Date(timestamp);
     if (finalDate.getFullYear() < 2020 || finalDate.getFullYear() > 2100) {
       return null;
@@ -145,8 +132,8 @@ export default function CreateIndividualScreen() {
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
         quality: 1,
-        selectionLimit: 0, // 不限制数量
-        exif: true, // 请求EXIF数据
+        selectionLimit: 0,
+        exif: true,
       });
 
       if (!result.canceled && result.assets.length > 0) {
@@ -180,7 +167,7 @@ export default function CreateIndividualScreen() {
           uri: asset.uri,
           width: asset.width,
           height: asset.height,
-          creationTime: Date.now(), // 拍照时的时间
+          creationTime: Date.now(),
         };
         setSelectedImages(prev => [...prev, newImage]);
       }
@@ -191,16 +178,12 @@ export default function CreateIndividualScreen() {
 
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
-    if (coverIndex >= index && coverIndex > 0) {
-      setCoverIndex(prev => prev - 1);
-    }
   };
 
   const showImageOptions = () => {
     setShowImagePicker(true);
   };
 
-  // 按日期分组图片
   const groupImagesByDate = (images: SelectedImage[]): Map<string, SelectedImage[]> => {
     const groups = new Map<string, SelectedImage[]>();
     for (const img of images) {
@@ -211,7 +194,6 @@ export default function CreateIndividualScreen() {
         existing.push(img);
         groups.set(dateKey, existing);
       } else {
-        // 没有时间的图片归到今天
         const today = new Date();
         const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
         const existing = groups.get(todayKey) || [];
@@ -235,11 +217,9 @@ export default function CreateIndividualScreen() {
 
     setSaving(true);
     try {
-      // 先将所有图片复制到文档目录，获取永久 URI
       const sourceUris = selectedImages.map(img => img.uri);
       const permanentUris = await copyImagesToDocumentDirectory(sourceUris);
 
-      // 按日期分组（使用永久 URI）
       const imagesWithPermanentUri = selectedImages.map((img, index) => ({
         ...img,
         permanentUri: permanentUris[index],
@@ -247,32 +227,25 @@ export default function CreateIndividualScreen() {
 
       const imageGroups = groupImagesByDate(imagesWithPermanentUri);
 
-      // 创建个体，使用永久 URI 作为封面
       const individualId = await IndividualRepository.create({
-        coverImagePath: imagesWithPermanentUri[coverIndex]?.permanentUri || 'https://picsum.photos/400/400',
+        coverImagePath: imagesWithPermanentUri[0]?.permanentUri || 'https://picsum.photos/400/400',
         title: title.trim(),
         description: description.trim(),
         groupIds,
       });
 
-      // 如果选择了分组，添加个体到这些分组
       if (groupIds.length > 0) {
         await GroupRepository.addIndividualsToGroup(groupIds[0], [individualId]);
-        // 如果选择多个分组，添加个体到其他分组
         for (let i = 1; i < groupIds.length; i++) {
           await GroupRepository.addIndividualsToGroup(groupIds[i], [individualId]);
         }
       }
 
-      // 为每个日期组创建一条记录
       const defaultTitle = '新记录';
       const defaultDesc = '暂无描述';
 
       for (const [dateKey, images] of imageGroups) {
-        // 使用该组第一张图片的时间作为记录时间
         const recordDate = images[0].creationTime || Date.now();
-
-        // 格式化日期作为默认标题
         const date = new Date(recordDate);
         const dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
         const titleForRecord = `${dateStr} 记录`;
@@ -286,7 +259,6 @@ export default function CreateIndividualScreen() {
         });
       }
 
-      // 跳转到个体详情页面
       navigation.replace('IndividualDetail', { individualId });
     } catch (error) {
       console.error('Failed to create individual:', error);
@@ -296,28 +268,55 @@ export default function CreateIndividualScreen() {
     }
   };
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
-  };
-
   const canSave = selectedImages.length > 0 && title.trim() && !saving;
 
+  // 渲染横向滚动图片
+  const renderImageScroll = () => {
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.imageScrollContent}
+      >
+        {selectedImages.map((image, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.imageScrollItem}
+            onPress={() => setCoverIndex(index)}
+            onLongPress={() => {
+              Alert.alert('删除图片', '确定要删除这张图片吗？', [
+                { text: '取消', style: 'cancel' },
+                { text: '删除', style: 'destructive', onPress: () => removeImage(index) },
+              ]);
+            }}
+          >
+            <Image source={{ uri: image.uri }} style={styles.scrollImage} resizeMode="cover" />
+            {index === coverIndex && (
+              <View style={styles.coverBadge}>
+                <Text style={styles.coverBadgeText}>封面</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+        {/* 添加按钮 */}
+        <TouchableOpacity style={styles.addScrollBtn} onPress={showImageOptions}>
+          <Text style={styles.addScrollText}>+</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
       {/* 顶部安全区域 */}
-      <View style={{ height: insets.top, backgroundColor: colors.surface }} />
+      <View style={{ height: insets.top, backgroundColor: '#ffffff' }} />
       {/* 顶部导航栏 */}
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      <View style={[styles.header, { backgroundColor: '#ffffff' }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={{ fontSize: 22, color: colors.textPrimary }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>创建个体</Text>
-        <TouchableOpacity onPress={handleSave} disabled={!canSave}>
-          <Text style={[styles.saveBtn, { color: canSave ? colors.primary : colors.textDisabled }]}>
-            保存
-          </Text>
-        </TouchableOpacity>
+        <View style={{ width: 50 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -327,112 +326,79 @@ export default function CreateIndividualScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: insets.bottom + 40 },
+            { paddingBottom: insets.bottom + 80 },
           ]}
           keyboardShouldPersistTaps="handled"
         >
-          {/* 图片选择区域 */}
-          <TouchableOpacity style={styles.imageSection} onPress={showImageOptions}>
-            {selectedImages.length > 0 ? (
-              <View style={styles.imagesContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {selectedImages.map((image, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.imageWrapper}
-                      onPress={() => setCoverIndex(index)}
-                      onLongPress={() => removeImage(index)}
-                    >
-                      <Image source={{ uri: image.uri }} style={styles.thumbnailImage} />
-                      {index === coverIndex && (
-                        <View style={[styles.coverBadge, { backgroundColor: colors.primary }]}>
-                          <Text style={styles.coverBadgeText}>封面</Text>
-                        </View>
-                      )}
-                      {image.creationTime && (
-                        <Text style={styles.imageDate}>{formatDate(image.creationTime)}</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-                <Text style={[styles.imageHint, { color: colors.textSecondary }]}>
-                  {selectedImages.length} 张照片 · 长按删除 · 点击设封面
-                </Text>
-              </View>
-            ) : (
-              <View style={[styles.coverPlaceholder, { backgroundColor: '#e0e0e0' }]}>
-                <Text style={styles.coverIcon}>📷</Text>
-                <Text style={[styles.coverHint, { color: '#999' }]}>点击选择图片（可多选）</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* 表单 */}
-          <View style={styles.form}>
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>
-                标题 <Text style={{ color: colors.primary }}>*</Text>
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="请输入个体标题"
-                placeholderTextColor={colors.textDisabled}
-                maxLength={50}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>描述</Text>
-              <TextInput
-                style={[
-                  styles.textArea,
-                  {
-                    color: colors.textPrimary,
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="请输入个体描述（可选）"
-                placeholderTextColor={colors.textDisabled}
-                multiline
-                numberOfLines={4}
-                maxLength={200}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>所属分组</Text>
-              <TouchableOpacity
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => setShowGroupPicker(true)}
-              >
-                <Text style={{ color: groupIds.length > 0 ? colors.textPrimary : colors.textDisabled }}>
-                  {groupIds.length > 0
-                    ? `已选择 ${groupIds.length} 个分组`
-                    : '不属于任何分组（可选）'}
-                </Text>
+          {/* 图片横向滚动 */}
+          <View style={styles.imageSection}>
+            {selectedImages.length > 0 ? renderImageScroll() : (
+              <TouchableOpacity style={styles.coverPlaceholder} onPress={showImageOptions}>
+                <Text style={styles.coverPlaceholderText}>+</Text>
               </TouchableOpacity>
-            </View>
+            )}
           </View>
+
+          {/* 标题输入 */}
+          <View style={styles.inputSection}>
+            <TextInput
+              style={[styles.titleInput, { color: colors.textPrimary }]}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="添加标题"
+              placeholderTextColor={colors.textDisabled}
+              maxLength={50}
+            />
+          </View>
+
+          {/* 描述输入 */}
+          <View style={styles.inputSection}>
+            <TextInput
+              style={[styles.descInput, { color: colors.textPrimary }]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="添加正文或发语音"
+              placeholderTextColor={colors.textDisabled}
+              multiline
+              maxLength={500}
+            />
+          </View>
+
+          {/* 分割线 */}
+          <View style={styles.separator} />
+
+          {/* 所属分组 */}
+          <TouchableOpacity
+            style={styles.optionItem}
+            onPress={() => setShowGroupPicker(true)}
+          >
+            <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>所属分组</Text>
+            <View style={styles.optionRight}>
+              <Text style={[styles.optionValue, { color: groupIds.length > 0 ? colors.textPrimary : colors.textDisabled }]}>
+                {groupIds.length > 0 ? `已选择 ${groupIds.length} 个分组` : '请选择（可选）'}
+              </Text>
+              <Text style={{ color: colors.textDisabled, fontSize: 18 }}> ›</Text>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 底部操作按钮 */}
+      <View style={[styles.bottomActions, { backgroundColor: '#ffffff', paddingBottom: insets.bottom + 12 }]}>
+        <TouchableOpacity
+          style={[styles.cancelBtn, { borderColor: '#e0e0e0' }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.cancelBtnText}>取消</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.saveBtnPrimary, { backgroundColor: '#ff4757' }]}
+          onPress={handleSave}
+          disabled={!canSave}
+        >
+          <Text style={[styles.saveBtnPrimaryText, { color: '#fff' }]}>保存</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* 图片选择弹窗 */}
       <Modal
@@ -468,14 +434,22 @@ export default function CreateIndividualScreen() {
         animationType="slide"
         onRequestClose={() => setShowGroupPicker(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowGroupPicker(false)}
+        >
+          <TouchableOpacity
+            style={[styles.modalContent, { backgroundColor: colors.surface }]}
+            activeOpacity={1}
+            onPress={() => {
+              setTimeout(() => setShowGroupPicker(false), 100);
+            }}
+          >
             <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>选择分组</Text>
             <TouchableOpacity
               style={styles.modalBtn}
-              onPress={() => {
-                setGroupIds([]);
-              }}
+              onPress={() => setGroupIds([])}
             >
               <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>
                 不属于任何分组
@@ -498,11 +472,11 @@ export default function CreateIndividualScreen() {
                 {groupIds.includes(group.id) && <Text style={styles.checkmark}>✓</Text>}
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.modalBtn} onPress={() => setShowGroupPicker(false)}>
-              <Text style={[styles.modalBtnText, { color: colors.primary }]}>完成</Text>
+            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnLast]} onPress={() => setShowGroupPicker(false)}>
+              <Text style={[styles.modalBtnText, { color: colors.primary }]}>确定</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -511,6 +485,7 @@ export default function CreateIndividualScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#ffffff',
   },
   flex: {
     flex: 1,
@@ -524,6 +499,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
   },
   backBtn: {
     width: 32,
@@ -535,96 +511,116 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  saveBtn: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
   content: {
     flex: 1,
   },
   imageSection: {
-    width: '100%',
+    marginHorizontal: 16,
+    marginTop: 16,
   },
-  imagesContainer: {
-    paddingVertical: 12,
+  imageScrollContent: {
+    gap: 8,
   },
-  imageWrapper: {
-    marginRight: 8,
+  imageScrollItem: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
     position: 'relative',
   },
-  thumbnailImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 4,
+  scrollImage: {
+    width: '100%',
+    height: '100%',
   },
   coverBadge: {
     position: 'absolute',
     top: 4,
     left: 4,
+    backgroundColor: '#ff4757',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 2,
+    borderRadius: 4,
   },
   coverBadgeText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 10,
+    fontWeight: '500',
   },
-  imageDate: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    color: '#fff',
-    fontSize: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 2,
-  },
-  coverPlaceholder: {
-    width: '100%',
-    aspectRatio: 16 / 9,
+  addScrollBtn: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coverIcon: {
+  addScrollText: {
+    fontSize: 36,
+    color: '#999',
+    fontWeight: '300',
+  },
+  coverPlaceholder: {
+    marginHorizontal: 16,
+    width: 80,
+    height: 80,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverPlaceholderText: {
     fontSize: 48,
-    marginBottom: 8,
+    color: '#999',
+    fontWeight: '300',
   },
   coverHint: {
     fontSize: 14,
+    color: '#999',
   },
-  imageHint: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 8,
+  addIconText: {
+    fontSize: 48,
+    color: '#999',
+    fontWeight: '300',
   },
-  form: {
-    padding: 16,
+  inputSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  input: {
-    height: 44,
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    justifyContent: 'center',
-  },
-  textArea: {
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+  titleInput: {
+    fontSize: 18,
+    fontWeight: '600',
     paddingVertical: 12,
-    fontSize: 14,
+  },
+  descInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    paddingVertical: 8,
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  optionLabel: {
+    fontSize: 15,
+  },
+  optionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionValue: {
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
@@ -635,11 +631,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     paddingBottom: 40,
-    elevation: 0,
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
   },
   modalTitle: {
     fontSize: 16,
@@ -666,5 +657,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#4CAF50',
     fontWeight: '600',
+  },
+  bottomActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333333',
+  },
+  saveBtnPrimary: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#ff4757',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveBtnPrimaryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#ffffff',
   },
 });
