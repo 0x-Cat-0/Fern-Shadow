@@ -159,18 +159,22 @@ export default function GroupDetailScreen() {
     navigation.navigate('IndividualDetail', { individualId: item.id });
   };
 
+  const handleCardLongPress = (item: Individual) => {
+    setSelectedIndividualId(item.id);
+  };
+
   // 编辑个体
-  const handleEditIndividual = (individual: Individual) => {
+  const handleEditIndividual = (item: Individual) => {
     setSelectedIndividualId(null);
-    navigation.navigate('EditIndividual', { individualId: individual.id });
+    navigation.navigate('EditIndividual', { individualId: item.id });
   };
 
   // 从分组移除个体（不是删除个体本身）
-  const handleRemoveFromGroup = (individual: Individual) => {
+  const handleRemoveFromGroup = (item: Individual) => {
     setSelectedIndividualId(null);
     Alert.alert(
       '确认移除',
-      `确定要从分组中移除"${individual.title}"吗？`,
+      `确定要从分组中移除"${item.title}"吗？`,
       [
         { text: '取消', style: 'cancel' },
         {
@@ -178,7 +182,7 @@ export default function GroupDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await GroupRepository.removeIndividualFromGroup(groupId, individual.id);
+              await GroupRepository.removeIndividualFromGroup(groupId, item.id);
               loadData();
             } catch (error) {
               console.error('Failed to remove individual from group:', error);
@@ -319,7 +323,7 @@ export default function GroupDetailScreen() {
                     <TouchableOpacity
                       style={stylesDetail.gridCard}
                       onPress={() => handleCardPress(item)}
-                      onLongPress={() => setSelectedIndividualId(item.id)}
+                      onLongPress={() => handleCardLongPress(item)}
                       activeOpacity={0.8}
                     >
                       <Image
@@ -336,7 +340,7 @@ export default function GroupDetailScreen() {
                         </Text>
                       </View>
                     </TouchableOpacity>
-                    {/* 编辑/移除按钮 - 独立于卡片 */}
+                    {/* 编辑/移除按钮 */}
                     {selectedIndividualId === item.id && (
                       <View
                         style={[stylesDetail.cardActionOverlay, stylesDetail.cardActionOverlayAbsolute]}
@@ -346,17 +350,15 @@ export default function GroupDetailScreen() {
                         <View style={stylesDetail.cardActionBtns} pointerEvents="box-none">
                           <TouchableOpacity
                             style={stylesDetail.cardActionBtn}
-                            onPress={() => {
-                              handleEditIndividual(item);
-                            }}
+                            onPress={() => handleEditIndividual(item)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
                             <Text style={[stylesDetail.cardActionBtnText, { color: '#666666' }]}>编辑</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={stylesDetail.cardActionBtn}
-                            onPress={() => {
-                              handleRemoveFromGroup(item);
-                            }}
+                            onPress={() => handleRemoveFromGroup(item)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
                             <Text style={[stylesDetail.cardActionBtnText, { color: '#FF4040' }]}>移除</Text>
                           </TouchableOpacity>
@@ -453,6 +455,7 @@ export default function GroupDetailScreen() {
 const stylesDetail = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'relative',
   },
   topBar: {
     height: 50,

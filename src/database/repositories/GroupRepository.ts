@@ -28,8 +28,12 @@ export class GroupRepository {
 
     if (sortType === 'hot') {
       orderBy = 'viewCount DESC, id DESC';
+    } else if (sortType === 'least_hot') {
+      orderBy = 'viewCount ASC, id DESC';
     } else if (sortType === 'latest') {
-      orderBy = 'createdAt DESC';
+      orderBy = 'updatedAt DESC, id DESC';
+    } else if (sortType === 'oldest') {
+      orderBy = 'updatedAt ASC, id DESC';
     }
 
     const rows = await db.getAllAsync<Group>(
@@ -45,8 +49,12 @@ export class GroupRepository {
 
     if (sortType === 'hot') {
       orderBy = 'viewCount DESC, id DESC';
+    } else if (sortType === 'least_hot') {
+      orderBy = 'viewCount ASC, id DESC';
     } else if (sortType === 'latest') {
-      orderBy = 'createdAt DESC';
+      orderBy = 'updatedAt DESC, id DESC';
+    } else if (sortType === 'oldest') {
+      orderBy = 'updatedAt ASC, id DESC';
     }
 
     const rows = await db.getAllAsync<Group>(

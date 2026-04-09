@@ -29,12 +29,6 @@ interface MainScreenProps {
   onViewModeChange?: (mode: ViewMode) => void;
 }
 
-const SORT_TABS: { key: SortType; label: string }[] = [
-  { key: 'default', label: '默认' },
-  { key: 'hot', label: '最热' },
-  { key: 'latest', label: '最新' },
-];
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 8;
 const CARD_WIDTH = (SCREEN_WIDTH - spacing.md * 2 - CARD_GAP) / 2;
@@ -117,14 +111,13 @@ function WaterfallCard({
           pointerEvents="box-none"
         >
           <View style={styles.cardActionOverlayBg} pointerEvents="none" />
-          <View style={styles.cardActionBtns}>
+          <View style={styles.cardActionBtns} pointerEvents="box-none">
             <TouchableOpacity
               style={styles.cardActionBtn}
               onPress={() => {
                 console.log('WaterfallCard Edit button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
                 onEdit?.();
               }}
-              onPressIn={() => console.log('WaterfallCard Edit onPressIn')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[styles.cardActionBtnText, { color: '#666666' }]}>编辑</Text>
@@ -135,7 +128,6 @@ function WaterfallCard({
                 console.log('WaterfallCard Delete button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
                 onDelete?.();
               }}
-              onPressIn={() => console.log('WaterfallCard Delete onPressIn')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[styles.cardActionBtnText, { color: '#FF4040' }]}>删除</Text>
@@ -185,7 +177,7 @@ function IndividualsView({
   }
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flexContainer]}>
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
@@ -266,12 +258,20 @@ function GroupsView({
   const itemHeight = itemWidth + 40; // 图片 + 内容高度
 
   const handleCardPress = (item: Group) => {
+    console.log('=== CARD PRESSED ===', item.id, 'selectedId:', selectedId);
     // 如果该项已选中，取消选择
     if (selectedId === item.id) {
+      console.log('=== CARD PRESSED - DESELECT ===');
       onSelectItem(null);
       return;
     }
+    console.log('=== CARD PRESSED - NAVIGATE ===');
     navigation.navigate('GroupDetail', { groupId: item.id });
+  };
+
+  const handleCardLongPress = (item: Group) => {
+    console.log('=== CARD LONG PRESS ===', item.id);
+    onSelectItem(item.id);
   };
 
   const rows: (Group | 'add')[][] = [];
@@ -295,14 +295,14 @@ function GroupsView({
   };
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flexContainer]}>
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-      >
+        >
         <View style={[styles.gridContainer, { paddingHorizontal: containerPadding }]}>
           {rows.map((row, rowIndex) => (
             <View key={rowIndex} style={styles.gridRow}>
@@ -337,14 +337,8 @@ function GroupsView({
                 >
                   <TouchableOpacity
                     style={styles.gridCard}
-                    onPress={() => {
-                      console.log('GroupsView Card onPress, item.id:', item.id, 'selectedId:', selectedId, 'disabled:', selectedId === item.id);
-                      handleCardPress(item);
-                    }}
-                    onLongPress={() => {
-                      console.log('GroupsView Card onLongPress, item.id:', item.id);
-                      onSelectItem(item.id);
-                    }}
+                    onPress={() => handleCardPress(item)}
+                    onLongPress={() => handleCardLongPress(item)}
                     activeOpacity={0.8}
                   >
                     <Image
@@ -361,28 +355,31 @@ function GroupsView({
                       </Text>
                     </View>
                   </TouchableOpacity>
-                  {/* 编辑/删除按钮 - 独立于卡片 */}
+                  {/* 编辑/删除按钮 */}
                   {selectedId === item.id && (
                     <View
                       style={[styles.cardActionOverlay, styles.cardActionOverlayAbsolute]}
+                      pointerEvents="box-none"
                     >
                       <View style={styles.cardActionOverlayBg} pointerEvents="none" />
                       <View style={styles.cardActionBtns}>
                         <TouchableOpacity
                           style={styles.cardActionBtn}
                           onPress={() => {
-                            console.log('GroupsView Edit button PRESSED, item.id:', item.id, 'selectedId:', selectedId);
+                            console.log('=== EDIT BUTTON PRESSED ===', item.id);
                             onEditItem(item);
                           }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <Text style={[styles.cardActionBtnText, { color: '#666666' }]}>编辑</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.cardActionBtn}
                           onPress={() => {
-                            console.log('GroupsView Delete button PRESSED, item.id:', item.id, 'selectedId:', selectedId);
+                            console.log('=== DELETE BUTTON PRESSED ===', item.id);
                             onDeleteItem(item);
                           }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <Text style={[styles.cardActionBtnText, { color: '#FF4040' }]}>删除</Text>
                         </TouchableOpacity>
@@ -400,14 +397,6 @@ function GroupsView({
             </View>
           ))}
         </View>
-        {/* 取消选择遮罩 - 放在内容之后渲染，使其在触摸事件处理顺序中更靠后 */}
-        {selectedId && (
-          <TouchableOpacity
-            style={styles.deselectOverlayInside}
-            activeOpacity={1}
-            onPress={() => onSelectItem(null)}
-          />
-        )}
       </ScrollView>
     </View>
   );
@@ -432,8 +421,8 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
     try {
       if (viewMode === 'all') {
         const data = searchQuery
-          ? await IndividualRepository.search(searchQuery)
-          : await IndividualRepository.findAll();
+          ? await IndividualRepository.search(searchQuery, sortType)
+          : await IndividualRepository.findAll(sortType);
         setIndividuals(data);
       } else {
         const data = searchQuery
@@ -535,25 +524,71 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
         </TouchableOpacity>
 
         <View style={styles.tabs}>
-          {SORT_TABS.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.tab}
-              onPress={() => setSortType(tab.key)}
+          {/* 默认 */}
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setSortType('default')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: sortType === 'default' ? colors.textPrimary : colors.textDisabled },
+              ]}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  { color: sortType === tab.key ? colors.textPrimary : colors.textDisabled },
-                ]}
-              >
-                {tab.label}
-              </Text>
-              {sortType === tab.key && (
-                <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
-              )}
-            </TouchableOpacity>
-          ))}
+              默认
+            </Text>
+            {sortType === 'default' && (
+              <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
+            )}
+          </TouchableOpacity>
+
+          {/* 最多查看/最少查看 */}
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => {
+              if (sortType === 'hot' || sortType === 'least_hot') {
+                setSortType(sortType === 'hot' ? 'least_hot' : 'hot');
+              } else {
+                setSortType('hot');
+              }
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: sortType === 'hot' || sortType === 'least_hot' ? colors.textPrimary : colors.textDisabled },
+              ]}
+            >
+              {sortType === 'least_hot' ? '最少查看' : '最多查看'}
+            </Text>
+            {(sortType === 'hot' || sortType === 'least_hot') && (
+              <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
+            )}
+          </TouchableOpacity>
+
+          {/* 最近查看/最久未看 */}
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => {
+              if (sortType === 'latest' || sortType === 'oldest') {
+                setSortType(sortType === 'latest' ? 'oldest' : 'latest');
+              } else {
+                setSortType('latest');
+              }
+            }}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                { color: sortType === 'latest' || sortType === 'oldest' ? colors.textPrimary : colors.textDisabled },
+              ]}
+            >
+              {sortType === 'oldest' ? '最久未看' : '最近查看'}
+            </Text>
+            {(sortType === 'latest' || sortType === 'oldest') && (
+              <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
+            )}
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity onPress={toggleSearch} style={styles.rightBtn}>
@@ -610,6 +645,10 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  flexContainer: {
+    flex: 1,
+    position: 'relative',
   },
   deselectOverlay: {
     position: 'absolute',

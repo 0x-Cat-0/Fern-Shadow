@@ -1,5 +1,5 @@
 import { getDatabase } from '..';
-import type { Individual, CreateIndividualDto, UpdateIndividualDto } from '../../types';
+import type { Individual, CreateIndividualDto, UpdateIndividualDto, SortType } from '../../types';
 
 export class IndividualRepository {
   static async create(dto: CreateIndividualDto): Promise<number> {
@@ -22,25 +22,42 @@ export class IndividualRepository {
     return row ?? null;
   }
 
-  static async findAll(): Promise<Individual[]> {
+  static async findAll(sortType: SortType = 'default'): Promise<Individual[]> {
     const db = getDatabase();
+    const orderBy = this.getOrderBy(sortType, 'individuals');
     const rows = await db.getAllAsync<Individual>(
-      `SELECT * FROM \`individuals\` ORDER BY id DESC`
+      `SELECT * FROM \`individuals\` ORDER BY ${orderBy}`
     );
     return rows;
   }
 
-  static async search(query: string): Promise<Individual[]> {
+  static async search(query: string, sortType: SortType = 'default'): Promise<Individual[]> {
     const db = getDatabase();
     const searchPattern = `%${query}%`;
+    const orderBy = this.getOrderBy(sortType, 'individuals');
 
     const rows = await db.getAllAsync<Individual>(
       `SELECT * FROM \`individuals\`
        WHERE title LIKE ? OR description LIKE ?
-       ORDER BY id DESC`,
+       ORDER BY ${orderBy}`,
       [searchPattern, searchPattern]
     );
     return rows;
+  }
+
+  private static getOrderBy(sortType: SortType, table: 'individuals' | 'groups'): string {
+    switch (sortType) {
+      case 'hot':
+        return `${table}.viewCount DESC`;
+      case 'least_hot':
+        return `${table}.viewCount ASC`;
+      case 'latest':
+        return `${table}.updatedAt DESC`;
+      case 'oldest':
+        return `${table}.updatedAt ASC`;
+      default:
+        return `${table}.id DESC`;
+    }
   }
 
   static async update(id: number, dto: UpdateIndividualDto): Promise<void> {

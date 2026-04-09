@@ -28,7 +28,7 @@ export interface Record {
   createdAt: number;
 }
 
-export type SortType = 'default' | 'hot' | 'latest';
+export type SortType = 'default' | 'hot' | 'least_hot' | 'latest' | 'oldest';
 
 export type CreateGroupDto = Pick<Group, 'coverImagePath' | 'title' | 'description'>;
 export type UpdateGroupDto = Partial<Pick<Group, 'coverImagePath' | 'title' | 'description'>>;
