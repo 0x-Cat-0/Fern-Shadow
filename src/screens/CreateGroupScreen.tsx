@@ -129,15 +129,16 @@ export default function CreateGroupScreen() {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert('提示', '请输入分组标题');
+      Alert.alert('提示', '请输入标题');
       return;
     }
 
     setSaving(true);
     try {
-      const permanentUri = coverImagePath
-        ? await copyImageToDocumentDirectory(coverImagePath)
-        : 'https://picsum.photos/400/400';
+      let permanentUri: string | undefined;
+      if (coverImagePath) {
+        permanentUri = await copyImageToDocumentDirectory(coverImagePath);
+      }
 
       // 创建分组并获取新分组ID
       const newGroupId = await GroupRepository.create({
@@ -253,7 +254,6 @@ export default function CreateGroupScreen() {
         <TouchableOpacity
           style={styles.saveBtnPrimary}
           onPress={handleSave}
-          disabled={!canSave}
         >
           <Text style={styles.saveBtnPrimaryText}>保存</Text>
         </TouchableOpacity>
@@ -352,7 +352,7 @@ export default function CreateGroupScreen() {
                       }}
                     >
                       <Image
-                        source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                        source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                         style={styles.modalItemImage}
                       />
                       <View style={styles.modalItemContent}>

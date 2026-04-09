@@ -618,7 +618,7 @@ export default function EditIndividualScreen() {
                       }}
                     >
                       <Image
-                        source={{ uri: group.coverImagePath || 'https://picsum.photos/200/200' }}
+                        source={group.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                         style={styles.modalItemImage}
                       />
                       <View style={styles.modalItemContent}>

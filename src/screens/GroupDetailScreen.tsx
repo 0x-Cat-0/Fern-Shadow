@@ -299,7 +299,7 @@ export default function GroupDetailScreen() {
         {/* 封面图 */}
         <View style={stylesDetail.coverSection}>
           <Image
-            source={{ uri: group?.coverImagePath || 'https://picsum.photos/400/200' }}
+            source={group?.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
             style={stylesDetail.coverImage}
             resizeMode="cover"
           />
@@ -372,7 +372,7 @@ export default function GroupDetailScreen() {
                     >
                       {/* 封面图 */}
                       <Image
-                        source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
+                        source={item.coverImagePath ? { uri: item.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                         style={stylesDetail.cardImage}
                         resizeMode="cover"
                       />
@@ -490,7 +490,7 @@ export default function GroupDetailScreen() {
                     onPress={() => toggleIndividualSelection(individual.id)}
                   >
                     <Image
-                      source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                      source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                       style={stylesDetail.modalItemImage}
                     />
                     <View style={stylesDetail.modalItemContent}>
@@ -528,7 +528,7 @@ export default function GroupDetailScreen() {
                       >
                         <View style={stylesDetail.modalGridCardInner}>
                           <Image
-                            source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                             style={stylesDetail.modalGridCardImage}
                           />
                           {!isSelected && (

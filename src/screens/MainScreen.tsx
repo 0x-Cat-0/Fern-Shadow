@@ -81,7 +81,7 @@ function WaterfallCard({
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
+          source={item.coverImagePath ? { uri: item.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
           style={[styles.cardImage, { height: imageHeight }]}
           resizeMode="cover"
           onLoad={handleImageLoad}
@@ -394,7 +394,7 @@ function GroupsView({
                     activeOpacity={0.8}
                   >
                     <Image
-                      source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
+                      source={item.coverImagePath ? { uri: item.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                       style={[styles.gridCardImage, { width: itemWidth, height: itemWidth }]}
                       resizeMode="cover"
                     />

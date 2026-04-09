@@ -8,7 +8,7 @@ export class GroupRepository {
     const result = await db.runAsync(
       `INSERT INTO \`groups\` (coverImagePath, title, description, viewCount, createdAt, updatedAt)
        VALUES (?, ?, ?, 0, ?, ?)`,
-      [dto.coverImagePath, dto.title, dto.description, now, now]
+      [dto.coverImagePath || '', dto.title, dto.description, now, now]
     );
     return result.lastInsertRowId;
   }
