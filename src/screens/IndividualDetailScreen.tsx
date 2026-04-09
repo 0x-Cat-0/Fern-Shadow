@@ -137,6 +137,24 @@ export default function IndividualDetailScreen() {
   // 是否有今天的记录
   const [hasTodayRecord, setHasTodayRecord] = useState(false);
 
+  // 计算陪伴天数和距离上次记录天数
+  const getDaysSinceCreation = () => {
+    if (records.length === 0) return 0;
+    const earliestDate = Math.min(...records.map(r => r.dateTimestamp));
+    const today = Date.now();
+    return Math.floor((today - earliestDate) / (1000 * 60 * 60 * 24));
+  };
+
+  const getDaysSinceLastRecord = () => {
+    if (records.length === 0) return 0;
+    // 找到最后一条有图片的记录
+    const recordsWithImages = records.filter(r => r.imagePaths.length > 0);
+    if (recordsWithImages.length === 0) return 0;
+    const lastRecordDate = Math.max(...recordsWithImages.map(r => r.dateTimestamp));
+    const today = Date.now();
+    return Math.floor((today - lastRecordDate) / (1000 * 60 * 60 * 24));
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -786,15 +804,22 @@ export default function IndividualDetailScreen() {
           resizeMode="cover"
         />
         <View style={styles.infoContent}>
-          <Text style={[styles.individualTitle, { color: '#333333' }]}>{individual?.title}</Text>
-          {individual?.description ? (
-            <Text style={[styles.individualDesc, { color: '#666666' }]} numberOfLines={2}>
-              {individual.description}
+          <View style={styles.infoTop}>
+            <Text style={[styles.individualTitle, { color: '#333333' }]}>{individual?.title}</Text>
+            {individual?.description ? (
+              <Text style={[styles.individualDesc, { color: '#666666' }]} numberOfLines={2}>
+                {individual.description}
+              </Text>
+            ) : null}
+          </View>
+          <View style={styles.infoBottom}>
+            <Text style={[styles.individualStats, { color: '#999999' }]}>
+              已经陪伴{getDaysSinceCreation()}天 · 上次记录{getDaysSinceLastRecord()}天前
             </Text>
-          ) : null}
-          <Text style={[styles.individualStats, { color: '#999999' }]}>
-            {records.length} 条记录 · 浏览 {individual?.viewCount || 0}
-          </Text>
+            <Text style={[styles.individualStats, { color: '#999999' }]}>
+              {records.length} 条记录 · 共{records.reduce((sum, r) => sum + r.imagePaths.length, 0)}张图片 · <Image source={require('../assets/icons/浏览.png')} style={{width: 12, height: 12}} /> {individual?.viewCount || 0}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -1214,17 +1239,24 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   coverImage: {
-    width: 80,
-    height: 80,
+    width: 100,
+    height: 120,
     borderRadius: 6,
     backgroundColor: '#e8e8e8',
   },
   infoContent: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+  },
+  infoTop: {
+    gap: 4,
+    paddingTop: 8,
+  },
+  infoBottom: {
+    gap: 4,
   },
   individualTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     marginBottom: 4,
   },
