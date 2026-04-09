@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   Text,
   Image,
-  Dimensions,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,10 +29,6 @@ interface MainScreenProps {
   onViewModeChange?: (mode: ViewMode) => void;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_GAP = 8;
-const CARD_WIDTH = (SCREEN_WIDTH - spacing.md * 2 - CARD_GAP) / 2;
-
 // 瀑布流卡片组件
 function WaterfallCard({
   item,
@@ -42,6 +38,7 @@ function WaterfallCard({
   onEdit,
   onDelete,
   onDeselect,
+  cardWidth,
 }: {
   item: Individual;
   style?: any;
@@ -50,16 +47,17 @@ function WaterfallCard({
   onEdit?: () => void;
   onDelete?: () => void;
   onDeselect?: () => void;
+  cardWidth: number;
 }) {
   const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
-  const [imageHeight, setImageHeight] = useState(CARD_WIDTH);
+  const [imageHeight, setImageHeight] = useState(cardWidth);
 
   const handleImageLoad = (event: any) => {
     const source = event?.nativeEvent?.source;
     if (source && source.width && source.height) {
       const aspectRatio = source.width / source.height;
-      setImageHeight(CARD_WIDTH / aspectRatio);
+      setImageHeight(cardWidth / aspectRatio);
     }
   };
 
@@ -89,18 +87,18 @@ function WaterfallCard({
           onLoad={handleImageLoad}
         />
         <View style={styles.cardContent}>
-          <View style={styles.cardTextRow}>
-            <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-              {item.title}
+          <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <View style={styles.cardDescRow}>
+            <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
+              {item.description || '没有描述哦...'}
             </Text>
             <View style={styles.cardBrowse}>
               <Image source={require('../assets/icons/浏览.png')} style={styles.browseIcon} />
               <Text style={[styles.browseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
             </View>
           </View>
-          <Text style={[styles.cardDesc, { color: colors.textSecondary }]} numberOfLines={2}>
-            {item.description}
-          </Text>
         </View>
       </TouchableOpacity>
 
@@ -149,6 +147,8 @@ function IndividualsView({
   onSelectItem,
   onEditItem,
   onDeleteItem,
+  screenWidth,
+  screenHeight,
 }: {
   individuals: Individual[];
   refreshing: boolean;
@@ -158,19 +158,22 @@ function IndividualsView({
   onSelectItem: (id: number | null) => void;
   onEditItem: (individual: Individual) => void;
   onDeleteItem: (individual: Individual) => void;
+  screenWidth: number;
+  screenHeight: number;
 }) {
   const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
+  const CARD_GAP = 8;
+  const CARD_WIDTH = (screenWidth - spacing.md * 2 - CARD_GAP) / 2;
   const leftColumn = individuals.filter((_, i) => i % 2 === 0);
   const rightColumn = individuals.filter((_, i) => i % 2 === 1);
 
   if (individuals.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>🌱</Text>
-        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>暂无个体</Text>
+        <Image source={require('../assets/icons/鹿角蕨.png')} style={styles.emptyImage} />
         <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
-          点击下方中间按钮创建第一个个体
+          点击下方中间加号添加植物
         </Text>
       </View>
     );
@@ -180,7 +183,7 @@ function IndividualsView({
     <View style={[styles.flexContainer]}>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: screenHeight * 0.1 + insets.bottom }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -205,6 +208,7 @@ function IndividualsView({
                 onEdit={() => onEditItem(item)}
                 onDelete={() => onDeleteItem(item)}
                 onDeselect={() => onSelectItem(null)}
+                cardWidth={CARD_WIDTH}
               />
             ))}
           </View>
@@ -219,9 +223,14 @@ function IndividualsView({
                 onEdit={() => onEditItem(item)}
                 onDelete={() => onDeleteItem(item)}
                 onDeselect={() => onSelectItem(null)}
+                cardWidth={CARD_WIDTH}
               />
             ))}
           </View>
+        </View>
+        {/* 底部提示 */}
+        <View style={styles.bottomHint}>
+          <Text style={[styles.bottomHintText, { color: colors.textDisabled }]}>已经到底了</Text>
         </View>
       </ScrollView>
     </View>
@@ -238,6 +247,8 @@ function GroupsView({
   onSelectItem,
   onEditItem,
   onDeleteItem,
+  screenWidth,
+  screenHeight,
 }: {
   groups: Group[];
   refreshing: boolean;
@@ -247,14 +258,17 @@ function GroupsView({
   onSelectItem: (id: number | null) => void;
   onEditItem: (group: Group) => void;
   onDeleteItem: (group: Group) => void;
+  screenWidth: number;
+  screenHeight: number;
 }) {
   const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
 
+  const CARD_GAP = 8;
   const numColumns = 3;
   const containerPadding = spacing.md;
   const gap = CARD_GAP;
-  const itemWidth = (SCREEN_WIDTH - containerPadding * 2 - gap * (numColumns - 1)) / numColumns;
+  const itemWidth = (screenWidth - containerPadding * 2 - gap * (numColumns - 1)) / numColumns;
   const itemHeight = itemWidth + 40; // 图片 + 内容高度
 
   const handleCardPress = (item: Group) => {
@@ -280,7 +294,10 @@ function GroupsView({
     rows.push(row);
   }
   // 在最后一行添加 'add'，但如果最后一行已满则另起一行
-  if (rows.length > 0) {
+  if (rows.length === 0) {
+    // 没有分组时也显示添加按钮
+    rows.push(['add' as const]);
+  } else {
     const lastRow = rows[rows.length - 1];
     if (lastRow.length < numColumns) {
       lastRow.push('add' as const);
@@ -294,11 +311,46 @@ function GroupsView({
     navigation.navigate('CreateGroup');
   };
 
+  if (groups.length === 0) {
+    return (
+      <View style={[styles.flexContainer]}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.listContent, { paddingBottom: screenHeight * 0.1 + insets.bottom }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={[styles.gridContainer, { paddingHorizontal: containerPadding }]}>
+            <View style={styles.gridRow}>
+              <TouchableOpacity
+                style={[
+                  styles.gridAddBtn,
+                  { width: itemWidth, height: itemHeight },
+                ]}
+                onPress={handleCreateGroup}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.gridAddBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+        <View style={[styles.emptyContainer, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
+          <Image source={require('../assets/icons/鹿角蕨.png')} style={styles.emptyImage} />
+          <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
+            点击上方灰色加号新建分组
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.flexContainer]}>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: screenHeight * 0.1 + insets.bottom }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -350,9 +402,15 @@ function GroupsView({
                       <Text style={[styles.gridCardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                         {item.title}
                       </Text>
-                      <Text style={[styles.gridCardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
-                        浏览 {item.viewCount}
-                      </Text>
+                      <View style={styles.gridCardDescRow}>
+                        <Text style={[styles.gridCardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {item.description || '没有描述哦...'}
+                        </Text>
+                        <View style={styles.gridCardBrowse}>
+                          <Image source={require('../assets/icons/浏览.png')} style={styles.gridBrowseIcon} />
+                          <Text style={[styles.gridBrowseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
+                        </View>
+                      </View>
                     </View>
                   </TouchableOpacity>
                   {/* 编辑/删除按钮 */}
@@ -397,6 +455,10 @@ function GroupsView({
             </View>
           ))}
         </View>
+        {/* 底部提示 */}
+        <View style={styles.bottomHint}>
+          <Text style={[styles.bottomHintText, { color: colors.textDisabled }]}>已经到底了</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -406,6 +468,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
   const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [individuals, setIndividuals] = useState<Individual[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -564,6 +627,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
             {(sortType === 'hot' || sortType === 'least_hot') && (
               <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
             )}
+            <Image source={require('../assets/icons/切换.png')} style={[styles.tabSwitchIcon, { display: sortType === 'hot' || sortType === 'least_hot' ? 'flex' : 'none' }]} />
           </TouchableOpacity>
 
           {/* 最近查看/最久未看 */}
@@ -588,6 +652,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
             {(sortType === 'latest' || sortType === 'oldest') && (
               <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
             )}
+            <Image source={require('../assets/icons/切换.png')} style={[styles.tabSwitchIcon, { display: sortType === 'latest' || sortType === 'oldest' ? 'flex' : 'none' }]} />
           </TouchableOpacity>
         </View>
 
@@ -622,6 +687,8 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
           onSelectItem={setSelectedIndividualId}
           onEditItem={handleEditIndividual}
           onDeleteItem={handleDeleteIndividual}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
         />
       ) : (
         <GroupsView
@@ -633,6 +700,8 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
           onSelectItem={setSelectedGroupId}
           onEditItem={handleEditGroup}
           onDeleteItem={handleDeleteGroup}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
         />
       )}
     </View>
@@ -697,11 +766,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 30,
+    gap: 16,
   },
   tab: {
     paddingVertical: 4,
     position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 16,
   },
   tabText: {
     fontSize: 16,
@@ -715,6 +787,14 @@ const styles = StyleSheet.create({
     width: 20,
     height: 2,
     borderRadius: 1,
+  },
+  tabSwitchIcon: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    marginTop: -7,
+    width: 14,
+    height: 14,
   },
   rightBtn: {
     width: 40,
@@ -737,8 +817,8 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   card: {
-    width: CARD_WIDTH,
-    marginBottom: CARD_GAP,
+    width: '100%',
+    marginBottom: 4,
     borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
@@ -747,38 +827,41 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   cardContent: {
-    padding: 10,
-  },
-  cardTextRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    flex: 1,
+    padding: '3%',
   },
   cardBrowse: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 4,
   },
   browseIcon: {
-    width: 14,
-    height: 14,
+    width: 12,
+    height: 12,
     marginRight: 2,
   },
   browseCount: {
     fontSize: typography.fontSize.xs,
   },
   cardTitle: {
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: 4,
+    marginBottom: 0,
+    lineHeight: 20,
+  },
+  cardDescRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
   cardDesc: {
+    flex: 1,
     fontSize: typography.fontSize.sm,
-    lineHeight: typography.fontSize.sm * 1.4,
+    lineHeight: typography.fontSize.sm * 1.0,
   },
   cardContainer: {
-    width: CARD_WIDTH,
-    marginBottom: CARD_GAP,
+    width: '100%',
+    marginBottom: 4,
     position: 'relative',
   },
   cardSelected: {
@@ -835,6 +918,11 @@ const styles = StyleSheet.create({
     fontSize: 64,
     marginBottom: spacing.md,
   },
+  emptyImage: {
+    width: 240,
+    height: 240,
+    marginBottom: spacing.md,
+  },
   emptyTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
@@ -843,12 +931,19 @@ const styles = StyleSheet.create({
   emptyMessage: {
     fontSize: typography.fontSize.base,
   },
+  bottomHint: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  bottomHintText: {
+    fontSize: typography.fontSize.sm,
+  },
   gridContainer: {
     flexDirection: 'column',
   },
   gridRow: {
     flexDirection: 'row',
-    marginBottom: CARD_GAP,
+    marginBottom: 8,
   },
   gridCard: {
     width: '100%',
@@ -870,18 +965,39 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
   },
   gridCardContent: {
-    padding: 8,
+    flex: 1,
+    padding: '3%',
   },
   gridCardTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: 2,
+    marginBottom: 0,
+  },
+  gridCardDescRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
   gridCardDesc: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    lineHeight: typography.fontSize.sm * 1.0,
+  },
+  gridCardBrowse: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  gridBrowseIcon: {
+    width: 12,
+    height: 12,
+    marginRight: 2,
+  },
+  gridBrowseCount: {
     fontSize: typography.fontSize.xs,
   },
   gridAddBtn: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#ebebeb',
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
@@ -889,7 +1005,7 @@ const styles = StyleSheet.create({
   },
   gridAddBtnText: {
     fontSize: 32,
-    color: '#cccccc',
+    color: '#adadad',
     fontWeight: '300',
   },
 });

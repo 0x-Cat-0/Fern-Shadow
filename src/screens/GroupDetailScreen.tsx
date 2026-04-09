@@ -9,7 +9,8 @@ import {
   Modal,
   ScrollView,
   Alert,
-  Dimensions,
+  useWindowDimensions,
+  PanResponder,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,19 +27,22 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'GroupDetail
 type GroupDetailRouteProp = RouteProp<RootStackParamList, 'GroupDetail'>;
 
 const CARD_GAP = 8;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const containerPadding = spacing.md;
-const numColumns = 3;
-const itemWidth = (SCREEN_WIDTH - containerPadding * 2 - CARD_GAP * (numColumns - 1)) / numColumns;
-const itemHeight = itemWidth + 40;
 
 export default function GroupDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<GroupDetailRouteProp>();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
 
   const { groupId } = route.params;
+
+  // 计算卡片尺寸
+  const containerPadding = spacing.md;
+  const numColumns = 3;
+  const itemWidth = (screenWidth - containerPadding * 2 - CARD_GAP * (numColumns - 1)) / numColumns;
+  const itemHeight = itemWidth + 40; // 图片 + 内容高度
+  const coverHeight = screenWidth * 0.4; // 封面图高度为屏幕宽度的40%
 
   const [group, setGroup] = useState<Group | null>(null);
   const [individuals, setIndividuals] = useState<Individual[]>([]);
@@ -51,6 +55,36 @@ export default function GroupDetailScreen() {
   const [allIndividuals, setAllIndividuals] = useState<Individual[]>([]);
   const [selectedIndividualIds, setSelectedIndividualIds] = useState<number[]>([]);
   const [addingToGroup, setAddingToGroup] = useState(false);
+
+  // 弹窗视图模式：列表或网格
+  const [addModalViewMode, setAddModalViewMode] = useState<'list' | 'grid'>('grid');
+  // 弹窗高度（默认屏幕一半）
+  const { height: screenHeight } = useWindowDimensions();
+  const [modalHeight, setModalHeight] = useState(screenHeight * 0.5);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // 拖动改变弹窗高度
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        setIsDragging(true);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const newHeight = screenHeight - gestureState.moveY;
+        // 限制最小和最大高度
+        const minHeight = screenHeight * 0.2;
+        const maxHeight = screenHeight * 0.85;
+        if (newHeight >= minHeight && newHeight <= maxHeight) {
+          setModalHeight(newHeight);
+        }
+      },
+      onPanResponderRelease: () => {
+        setIsDragging(false);
+      },
+    })
+  ).current;
 
   // 长按选择状态
   const [selectedIndividualId, setSelectedIndividualId] = useState<number | null>(null);
@@ -252,7 +286,7 @@ export default function GroupDetailScreen() {
 
       <ScrollView
         style={stylesDetail.scrollView}
-        contentContainerStyle={[stylesDetail.scrollContent, { paddingBottom: insets.bottom + spacing.lg }]}
+        contentContainerStyle={[stylesDetail.scrollContent, { paddingBottom: screenHeight * 0.1 + insets.bottom }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -301,66 +335,80 @@ export default function GroupDetailScreen() {
               {row.map((item, colIndex) => {
                 if (item === 'add') {
                   return (
-                    <TouchableOpacity
+                    <View
                       key="add-btn"
-                      style={[stylesDetail.gridAddBtn, { width: itemWidth, height: itemHeight }]}
-                      onPress={handleOpenAddModal}
-                      activeOpacity={0.7}
+                      style={[
+                        stylesDetail.addBtnWrapper,
+                        { width: itemWidth, height: itemWidth + 50 },
+                        colIndex < numColumns - 1 && { marginRight: CARD_GAP },
+                      ]}
                     >
-                      <Text style={stylesDetail.gridAddBtnText}>+</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={stylesDetail.addBtn}
+                        onPress={handleOpenAddModal}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={stylesDetail.addBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
                   );
                 }
+                const isSelected = selectedIndividualId === item.id;
                 return (
                   <View
                     key={item.id}
                     style={[
-                      stylesDetail.gridCardWrapper,
-                      { width: itemWidth, height: itemHeight },
-                      selectedIndividualId === item.id && stylesDetail.cardSelected,
+                      stylesDetail.cardWrapper,
+                      { width: itemWidth },
+                      colIndex < numColumns - 1 && { marginRight: CARD_GAP },
                     ]}
                   >
+                    {/* 卡片主体 */}
                     <TouchableOpacity
-                      style={stylesDetail.gridCard}
+                      style={stylesDetail.card}
                       onPress={() => handleCardPress(item)}
                       onLongPress={() => handleCardLongPress(item)}
                       activeOpacity={0.8}
                     >
+                      {/* 封面图 */}
                       <Image
                         source={{ uri: item.coverImagePath || 'https://picsum.photos/200/200' }}
-                        style={[stylesDetail.gridCardImage, { width: itemWidth, height: itemWidth }]}
+                        style={stylesDetail.cardImage}
                         resizeMode="cover"
                       />
-                      <View style={stylesDetail.gridCardContent}>
-                        <Text style={[stylesDetail.gridCardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={[stylesDetail.gridCardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
-                          浏览 {item.viewCount}
-                        </Text>
+                      {/* 底部信息栏 */}
+                      <View style={[stylesDetail.cardInfo, { backgroundColor: colors.background }]}>
+                        <View style={stylesDetail.cardInfoLeft}>
+                          <Text style={[stylesDetail.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                            {item.title}
+                          </Text>
+                          <Text style={[stylesDetail.cardDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {item.description || '没有描述哦...'}
+                          </Text>
+                        </View>
+                        <View style={stylesDetail.cardInfoRight}>
+                          <Image source={require('../assets/icons/浏览.png')} style={stylesDetail.browseIcon} />
+                          <Text style={[stylesDetail.browseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
+                        </View>
                       </View>
                     </TouchableOpacity>
-                    {/* 编辑/移除按钮 */}
-                    {selectedIndividualId === item.id && (
-                      <View
-                        style={[stylesDetail.cardActionOverlay, stylesDetail.cardActionOverlayAbsolute]}
-                        pointerEvents="box-none"
-                      >
-                        <View style={stylesDetail.cardActionOverlayBg} pointerEvents="none" />
-                        <View style={stylesDetail.cardActionBtns} pointerEvents="box-none">
+
+                    {/* 长按编辑/移除遮罩 */}
+                    {isSelected && (
+                      <View style={stylesDetail.actionOverlay}>
+                        <View style={stylesDetail.actionBg} />
+                        <View style={stylesDetail.actionBtns}>
                           <TouchableOpacity
-                            style={stylesDetail.cardActionBtn}
+                            style={stylesDetail.actionBtn}
                             onPress={() => handleEditIndividual(item)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Text style={[stylesDetail.cardActionBtnText, { color: '#666666' }]}>编辑</Text>
+                            <Text style={stylesDetail.actionBtnText}>编辑</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={stylesDetail.cardActionBtn}
+                            style={stylesDetail.actionBtn}
                             onPress={() => handleRemoveFromGroup(item)}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Text style={[stylesDetail.cardActionBtnText, { color: '#FF4040' }]}>移除</Text>
+                            <Text style={[stylesDetail.actionBtnText, { color: '#FF4040' }]}>移除</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -368,13 +416,12 @@ export default function GroupDetailScreen() {
                   </View>
                 );
               })}
-              {/* 补齐空白 */}
-              {row.length < numColumns &&
-                Array.from({ length: numColumns - row.length }).map((_, i) => (
-                  <View key={`placeholder-${i}`} style={[stylesDetail.gridCardPlaceholder, { width: itemWidth, height: itemHeight }]} />
-                ))}
             </View>
           ))}
+        </View>
+        {/* 底部提示 */}
+        <View style={stylesDetail.bottomHint}>
+          <Text style={[stylesDetail.bottomHintText, { color: colors.textDisabled }]}>已经到底了</Text>
         </View>
       </ScrollView>
 
@@ -396,25 +443,46 @@ export default function GroupDetailScreen() {
           }}
         >
           <TouchableOpacity
-            style={[stylesDetail.modalContent, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 20 }]}
+            style={[stylesDetail.modalContent, {
+              backgroundColor: colors.surface,
+              paddingBottom: insets.bottom + 20,
+              height: modalHeight,
+            }]}
             activeOpacity={1}
             onPress={() => {}}
           >
+            {/* 拖动手柄 */}
+            <View style={stylesDetail.dragHandleContainer} {...panResponder.panHandlers}>
+              <View style={[stylesDetail.dragHandle, isDragging && stylesDetail.dragHandleActive]} />
+            </View>
+
             <View style={stylesDetail.modalHeader}>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Text style={[stylesDetail.modalCancel, { color: colors.textDisabled }]}>取消</Text>
+                <Text style={[stylesDetail.modalCancel, { color: colors.textPrimary }]}>取消</Text>
               </TouchableOpacity>
-              <Text style={[stylesDetail.modalTitle, { color: colors.textPrimary }]}>添加个体</Text>
-              <TouchableOpacity onPress={handleConfirmAdd} disabled={addingToGroup}>
-                <Text style={[stylesDetail.modalConfirm, { color: addingToGroup ? colors.textDisabled : colors.primary }]}>
-                  完成{selectedIndividualIds.length > 0 ? ` (${selectedIndividualIds.length})` : ''}
-                </Text>
-              </TouchableOpacity>
+              <View style={stylesDetail.modalHeaderRight}>
+                {/* 视图切换按钮 */}
+                <TouchableOpacity
+                  style={stylesDetail.viewModeBtn}
+                  onPress={() => setAddModalViewMode(addModalViewMode === 'list' ? 'grid' : 'list')}
+                >
+                  <Text style={[stylesDetail.viewModeBtnText, { color: colors.textPrimary }]}>
+                    {addModalViewMode === 'list' ? '▦' : '☰'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleConfirmAdd} disabled={addingToGroup}>
+                  <Text style={[stylesDetail.modalConfirm, { color: addingToGroup ? colors.textDisabled : colors.textPrimary }]}>
+                    完成{selectedIndividualIds.length > 0 ? ` (${selectedIndividualIds.length})` : ''}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <ScrollView style={stylesDetail.modalList}>
+
+            <ScrollView style={addModalViewMode === 'list' ? stylesDetail.modalList : stylesDetail.modalGridList}>
               {allIndividuals.length === 0 ? (
                 <Text style={[stylesDetail.noIndividualsText, { color: colors.textDisabled }]}>暂无可添加的个体</Text>
-              ) : (
+              ) : addModalViewMode === 'list' ? (
+                // 列表形式
                 allIndividuals.map(individual => (
                   <TouchableOpacity
                     key={individual.id}
@@ -437,12 +505,48 @@ export default function GroupDetailScreen() {
                     </View>
                     <View style={[
                       stylesDetail.checkbox,
-                      selectedIndividualIds.includes(individual.id) && { backgroundColor: colors.primary, borderColor: colors.primary }
+                      selectedIndividualIds.includes(individual.id) && stylesDetail.checkboxSelected
                     ]}>
                       {selectedIndividualIds.includes(individual.id) && <Text style={stylesDetail.checkboxText}>✓</Text>}
                     </View>
                   </TouchableOpacity>
                 ))
+              ) : (
+                // 网格形式：一行四个
+                <View style={stylesDetail.modalGridContainer}>
+                  {allIndividuals.map(individual => {
+                    const isSelected = selectedIndividualIds.includes(individual.id);
+                    return (
+                      <TouchableOpacity
+                        key={individual.id}
+                        style={[
+                          stylesDetail.modalGridCard,
+                          !isSelected && { borderColor: '#cccccc', borderWidth: 1 },
+                        ]}
+                        onPress={() => toggleIndividualSelection(individual.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={stylesDetail.modalGridCardInner}>
+                          <Image
+                            source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                            style={stylesDetail.modalGridCardImage}
+                          />
+                          {!isSelected && (
+                            <View style={stylesDetail.modalGridCardOverlay} pointerEvents="none" />
+                          )}
+                          <View style={stylesDetail.modalGridCardTitleWrapper}>
+                            <Text
+                              style={[stylesDetail.modalGridCardTitle, { color: '#ffffff' }]}
+                              numberOfLines={1}
+                            >
+                              {individual.title}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               )}
             </ScrollView>
           </TouchableOpacity>
@@ -482,7 +586,8 @@ const stylesDetail = StyleSheet.create({
     paddingHorizontal: 4,
   },
   coverSection: {
-    height: 200,
+    width: '100%',
+    aspectRatio: 2.5, // 宽高比约为 2.5:1
     position: 'relative',
   },
   coverImage: {
@@ -522,78 +627,90 @@ const stylesDetail = StyleSheet.create({
   },
   gridRow: {
     flexDirection: 'row',
+    justifyContent: 'flex-start',
     marginBottom: CARD_GAP,
   },
-  gridCard: {
-    width: '100%',
-    height: '100%',
+  // 卡片包装器 - 控制宽度和右边距
+  cardWrapper: {
+    borderRadius: 4,
+    overflow: 'visible',
+  },
+  // 卡片主体
+  card: {
+    flexDirection: 'column',
     borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
+    width: '100%',
   },
-  gridCardWrapper: {
-    position: 'relative',
-    width: itemWidth,
-    height: itemHeight,
-    borderRadius: 4,
-    overflow: 'visible',
-    marginRight: CARD_GAP,
-  },
-  gridCardPlaceholder: {
-    borderRadius: 4,
-    backgroundColor: 'transparent',
-    marginRight: CARD_GAP,
-  },
-  gridCardImage: {
+  // 封面图
+  cardImage: {
+    width: '100%',
     aspectRatio: 1,
+    resizeMode: 'cover',
   },
-  gridCardContent: {
-    padding: 8,
+  // 底部信息栏
+  cardInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  gridCardTitle: {
-    fontSize: typography.fontSize.sm,
+  cardInfoLeft: {
+    flex: 1,
+    marginRight: 8,
+    justifyContent: 'flex-end',
+  },
+  cardInfoRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+  },
+  cardTitle: {
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: 2,
+    marginBottom: 0,
   },
-  gridCardDesc: {
+  cardDesc: {
+    fontSize: typography.fontSize.sm,
+    lineHeight: typography.fontSize.sm * 1.0,
+  },
+  browseIcon: {
+    width: 12,
+    height: 12,
+    marginRight: 2,
+  },
+  browseCount: {
     fontSize: typography.fontSize.xs,
   },
-  gridAddBtn: {
-    backgroundColor: '#f0f0f0',
+  bottomHint: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  bottomHintText: {
+    fontSize: typography.fontSize.sm,
+  },
+  // 添加按钮包装器
+  addBtnWrapper: {
     borderRadius: 4,
+    overflow: 'hidden',
+  },
+  // 添加按钮
+  addBtn: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#ebebeb',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: CARD_GAP,
   },
-  gridAddBtnText: {
+  addBtnText: {
     fontSize: 32,
-    color: '#cccccc',
+    color: '#adadad',
     fontWeight: '300',
   },
-  deselectOverlay: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1,
-  },
-  deselectOverlayInside: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 5,
-  },
-  cardSelected: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  cardActionOverlay: {
+  // 编辑/移除遮罩层
+  actionOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -601,33 +718,34 @@ const stylesDetail = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  cardActionOverlayAbsolute: {
     zIndex: 10,
   },
-  cardActionOverlayBg: {
+  actionBg: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 4,
   },
-  cardActionBtns: {
+  actionBtns: {
     position: 'relative',
     width: '80%',
-    gap: 12,
     flexDirection: 'column',
+    gap: 10,
   },
-  cardActionBtn: {
+  actionBtn: {
     width: '100%',
     paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: '#ffffff',
+    alignItems: 'center',
   },
-  cardActionBtnText: {
+  actionBtnText: {
     fontSize: 15,
     fontWeight: '500',
+    color: '#666666',
     textAlign: 'center',
   },
   emptyContainer: {
@@ -651,16 +769,39 @@ const stylesDetail = StyleSheet.create({
   modalContent: {
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f0f0f0',
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  viewModeBtn: {
+    padding: 4,
+  },
+  viewModeBtnText: {
+    fontSize: 18,
+  },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#cccccc',
+    borderRadius: 2,
+  },
+  dragHandleActive: {
+    backgroundColor: '#cccccc',
   },
   modalCancel: {
     fontSize: 16,
@@ -676,6 +817,54 @@ const stylesDetail = StyleSheet.create({
   modalList: {
     paddingHorizontal: 20,
   },
+  modalGridList: {
+    paddingHorizontal: 12,
+  },
+  modalGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingTop: 8,
+  },
+  modalGridCard: {
+    width: '23%',
+    marginHorizontal: '1%',
+    marginBottom: 12,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  modalGridCardInner: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  modalGridCardImageWrapper: {
+    width: '100%',
+    flex: 1,
+    position: 'relative',
+  },
+  modalGridCardImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e0e0e0',
+  },
+  modalGridCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalGridCardTitleWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    backgroundColor: 'rgba(128,128,128,0.4)',
+  },
+  modalGridCardTitle: {
+    fontSize: 11,
+    textAlign: 'center',
+  },
   noIndividualsText: {
     textAlign: 'center',
     paddingVertical: 40,
@@ -687,6 +876,13 @@ const stylesDetail = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f0f0f0',
+  },
+  modalItemShadow: {
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modalItemImage: {
     width: 50,
@@ -714,6 +910,15 @@ const stylesDetail = StyleSheet.create({
     borderColor: '#cccccc',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#888888',
+    borderColor: '#888888',
+  },
+  checkboxOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 2,
   },
   checkboxText: {
     color: '#ffffff',

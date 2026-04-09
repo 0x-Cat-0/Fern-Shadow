@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -11,6 +11,8 @@ import {
   Alert,
   Image,
   Modal,
+  PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -37,6 +39,36 @@ export default function CreateGroupScreen() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [showIndividualPicker, setShowIndividualPicker] = useState(false);
   const [individuals, setIndividuals] = useState<Individual[]>([]);
+
+  // 弹窗视图模式
+  const [pickerViewMode, setPickerViewMode] = useState<'list' | 'grid'>('grid');
+
+  // 弹窗高度
+  const { height: screenHeight } = useWindowDimensions();
+  const [modalHeight, setModalHeight] = useState(screenHeight * 0.5);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // 拖动改变弹窗高度
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        setIsDragging(true);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const newHeight = screenHeight - gestureState.moveY;
+        const minHeight = screenHeight * 0.2;
+        const maxHeight = screenHeight * 0.85;
+        if (newHeight >= minHeight && newHeight <= maxHeight) {
+          setModalHeight(newHeight);
+        }
+      },
+      onPanResponderRelease: () => {
+        setIsDragging(false);
+      },
+    })
+  ).current;
 
   const requestPermission = async (type: 'camera' | 'library') => {
     if (type === 'camera') {
@@ -184,7 +216,7 @@ export default function CreateGroupScreen() {
               style={styles.descInput}
               value={description}
               onChangeText={setDescription}
-              placeholder="添加正文或发语音"
+              placeholder="请添加描述"
               placeholderTextColor={colors.textDisabled}
               multiline
               maxLength={500}
@@ -268,42 +300,116 @@ export default function CreateGroupScreen() {
           onPress={() => setShowIndividualPicker(false)}
         >
           <TouchableOpacity
-            style={[styles.modalContent, { backgroundColor: colors.surface }]}
+            style={[styles.modalContent, {
+              backgroundColor: colors.surface,
+              paddingBottom: insets.bottom + 20,
+              height: modalHeight,
+            }]}
             activeOpacity={1}
-            onPress={() => {
-              // Delay to allow button selections to complete first
-              setTimeout(() => setShowIndividualPicker(false), 100);
-            }}
+            onPress={() => {}}
           >
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>选择植物</Text>
-            <TouchableOpacity
-              style={styles.modalBtn}
-              onPress={() => setSelectedIndividualIds([])}
-            >
-              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>
-                不选择任何植物
-              </Text>
-              {selectedIndividualIds.length === 0 && <Text style={styles.checkmark}>✓</Text>}
-            </TouchableOpacity>
-            {individuals.map(individual => (
-              <TouchableOpacity
-                key={individual.id}
-                style={styles.modalBtn}
-                onPress={() => {
-                  setSelectedIndividualIds(prev =>
-                    prev.includes(individual.id)
-                      ? prev.filter(id => id !== individual.id)
-                      : [...prev, individual.id]
-                  );
-                }}
-              >
-                <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>{individual.title}</Text>
-                {selectedIndividualIds.includes(individual.id) && <Text style={styles.checkmark}>✓</Text>}
+            {/* 拖动手柄 */}
+            <View style={styles.dragHandleContainer} {...panResponder.panHandlers}>
+              <View style={[styles.dragHandle, isDragging && styles.dragHandleActive]} />
+            </View>
+
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowIndividualPicker(false)}>
+                <Text style={[styles.modalCancel, { color: colors.textPrimary }]}>取消</Text>
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnLast]} onPress={() => setShowIndividualPicker(false)}>
-              <Text style={[styles.modalBtnText, { color: colors.primary }]}>确定</Text>
-            </TouchableOpacity>
+              <View style={styles.modalHeaderRight}>
+                <TouchableOpacity
+                  style={styles.viewModeBtn}
+                  onPress={() => setPickerViewMode(pickerViewMode === 'list' ? 'grid' : 'list')}
+                >
+                  <Text style={[styles.viewModeBtnText, { color: colors.textPrimary }]}>
+                    {pickerViewMode === 'list' ? '▦' : '☰'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowIndividualPicker(false)}>
+                  <Text style={[styles.modalConfirm, { color: colors.textPrimary }]}>
+                    完成{selectedIndividualIds.length > 0 ? ` (${selectedIndividualIds.length})` : ''}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <ScrollView style={pickerViewMode === 'list' ? styles.modalList : styles.modalGridList}>
+              {individuals.length === 0 ? (
+                <Text style={[styles.noIndividualsText, { color: colors.textDisabled }]}>暂无可添加的植物</Text>
+              ) : pickerViewMode === 'list' ? (
+                <>
+                  {individuals.map(individual => (
+                    <TouchableOpacity
+                      key={individual.id}
+                      style={styles.modalItem}
+                      onPress={() => {
+                        setSelectedIndividualIds(prev =>
+                          prev.includes(individual.id)
+                            ? prev.filter(id => id !== individual.id)
+                            : [...prev, individual.id]
+                        );
+                      }}
+                    >
+                      <Image
+                        source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                        style={styles.modalItemImage}
+                      />
+                      <View style={styles.modalItemContent}>
+                        <Text style={[styles.modalItemTitle, { color: colors.textPrimary }]}>{individual.title}</Text>
+                      </View>
+                      <View style={[
+                        styles.checkbox,
+                        selectedIndividualIds.includes(individual.id) && styles.checkboxSelected
+                      ]}>
+                        {selectedIndividualIds.includes(individual.id) && <Text style={styles.checkmark}>✓</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              ) : (
+                <View style={styles.modalGridContainer}>
+                  {individuals.map(individual => {
+                    const isSelected = selectedIndividualIds.includes(individual.id);
+                    return (
+                      <TouchableOpacity
+                        key={individual.id}
+                        style={[
+                          styles.modalGridCard,
+                          !isSelected && { borderColor: '#cccccc', borderWidth: 1 },
+                        ]}
+                        onPress={() => {
+                          setSelectedIndividualIds(prev =>
+                            prev.includes(individual.id)
+                              ? prev.filter(id => id !== individual.id)
+                              : [...prev, individual.id]
+                          );
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.modalGridCardInner}>
+                          <Image
+                            source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                            style={styles.modalGridCardImage}
+                          />
+                          {!isSelected && (
+                            <View style={styles.modalGridCardOverlay} pointerEvents="none" />
+                          )}
+                          <View style={styles.modalGridCardTitleWrapper}>
+                            <Text
+                              style={[styles.modalGridCardTitle, { color: '#ffffff' }]}
+                              numberOfLines={1}
+                            >
+                              {individual.title}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </ScrollView>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -416,6 +522,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     paddingBottom: 40,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   modalTitle: {
     fontSize: 16,
@@ -435,13 +543,136 @@ const styles = StyleSheet.create({
   },
   modalBtnText: {
     fontSize: 16,
-    color: '#999999',
+    color: '#666666',
+  },
+  dragHandleContainer: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#cccccc',
+    borderRadius: 2,
+  },
+  dragHandleActive: {
+    backgroundColor: '#999999',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  viewModeBtn: {
+    padding: 4,
+  },
+  viewModeBtnText: {
+    fontSize: 18,
+  },
+  modalCancel: {
+    fontSize: 16,
+  },
+  modalConfirm: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalList: {
+    paddingHorizontal: 20,
+  },
+  modalGridList: {
+    paddingHorizontal: 12,
+  },
+  modalGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingTop: 8,
+  },
+  modalGridCard: {
+    width: '23%',
+    marginHorizontal: '1%',
+    marginBottom: 12,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  modalGridCardInner: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  modalGridCardImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e0e0e0',
+  },
+  modalGridCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  modalGridCardTitleWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    backgroundColor: 'rgba(128,128,128,0.6)',
+  },
+  modalGridCardTitle: {
+    fontSize: 11,
+    textAlign: 'center',
+  },
+  noIndividualsText: {
+    textAlign: 'center',
+    paddingVertical: 40,
+    fontSize: 14,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 4,
+    backgroundColor: '#e0e0e0',
+  },
+  modalItemContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  modalItemTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#cccccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#888888',
+    borderColor: '#888888',
   },
   checkmark: {
-    position: 'absolute',
-    right: 16,
-    fontSize: 18,
-    color: '#4CAF50',
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '600',
   },
   bottomActions: {

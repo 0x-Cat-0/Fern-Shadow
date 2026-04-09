@@ -13,6 +13,7 @@ import {
   Modal,
   ScrollView,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -44,6 +45,7 @@ export default function IndividualDetailScreen() {
   const route = useRoute<IndividualDetailRouteProp>();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const { individualId } = route.params;
 
@@ -144,12 +146,15 @@ export default function IndividualDetailScreen() {
   // 当图片索引改变时，滚动到对应位置
   useEffect(() => {
     if (viewingImageIndex !== null && scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({
-        x: viewingImageIndex * Dimensions.get('window').width,
-        animated: false,
-      });
+      // 延迟滚动，确保 Modal 已完全打开
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({
+          x: viewingImageIndex * screenWidth,
+          animated: false,
+        });
+      }, 100);
     }
-  }, [viewingImageIndex]);
+  }, [viewingImageIndex, screenWidth]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -874,7 +879,7 @@ export default function IndividualDetailScreen() {
         keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
-        contentContainerStyle={{ paddingBottom: Dimensions.get('window').height * 0.3 + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: screenHeight * 0.3 + insets.bottom }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -892,6 +897,7 @@ export default function IndividualDetailScreen() {
         visible={viewingImageIndex !== null}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setViewingImageIndex(null)}
       >
         <View style={styles.imageViewerContainer}>
@@ -911,14 +917,15 @@ export default function IndividualDetailScreen() {
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ width: viewingImagePaths.length * screenWidth }}
             onMomentumScrollEnd={(e) => {
-              const pageIndex = Math.round(e.nativeEvent.contentOffset.x / Dimensions.get('window').width);
+              const pageIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
               setViewingImageIndex(pageIndex);
             }}
             scrollEventThrottle={16}
           >
             {viewingImagePaths.map((path, idx) => (
-              <View key={idx} style={styles.imageViewerItem}>
+              <View key={idx} style={[styles.imageViewerItem, { width: screenWidth }]}>
                 <TouchableOpacity
                   style={styles.imageTouchable}
                   onPress={handleImageViewerTap}
@@ -988,8 +995,8 @@ export default function IndividualDetailScreen() {
             style={[
               styles.longPressMenu,
               {
-                top: Math.min(longPressPosition.y, Dimensions.get('window').height - 150),
-                left: Math.min(longPressPosition.x, Dimensions.get('window').width - 120),
+                top: Math.min(longPressPosition.y, screenHeight - 150),
+                left: Math.min(longPressPosition.x, screenWidth - 120),
               },
             ]}
           >
@@ -1346,7 +1353,7 @@ const styles = StyleSheet.create({
   },
   imageViewerContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
+    backgroundColor: '#000000',
   },
   imageViewerHeader: {
     height: 60,
@@ -1370,8 +1377,8 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   imageViewerItem: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1384,7 +1391,6 @@ const styles = StyleSheet.create({
   imageViewerImage: {
     width: '100%',
     height: '100%',
-    marginBottom: '20%',
   },
   imageViewerIndicator: {
     position: 'absolute',
