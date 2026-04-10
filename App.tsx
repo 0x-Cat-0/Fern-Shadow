@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ActivityIndicator,
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import * as Updates from 'expo-updates';
 
 import { initDatabase, isDatabaseInitialized } from './src/database';
 import { ThemeProvider } from './src/contexts/ThemeContext';
@@ -248,9 +249,18 @@ export default function App() {
         if (!isDatabaseInitialized()) {
           await initDatabase();
         }
+
+        // 检查并下载热更新
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          // 有更新时，下次启动应用
+          await Updates.reloadAsync();
+        }
+
         setIsReady(true);
       } catch (error) {
-        console.error('Failed to initialize database:', error);
+        console.error('Failed to initialize:', error);
         setIsReady(true);
       }
     }

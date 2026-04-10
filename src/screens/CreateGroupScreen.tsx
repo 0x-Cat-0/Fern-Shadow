@@ -44,9 +44,12 @@ export default function CreateGroupScreen() {
   const [pickerViewMode, setPickerViewMode] = useState<'list' | 'grid'>('grid');
 
   // 弹窗高度
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const [modalHeight, setModalHeight] = useState(screenHeight * 0.5);
   const [isDragging, setIsDragging] = useState(false);
+
+  // 计算列表项图片尺寸 - 根据屏幕宽度调整，小屏手机适当缩小
+  const listItemImageSize = Math.max(45, Math.min(60, screenWidth * 0.14));
 
   // 拖动改变弹窗高度
   const panResponder = useRef(
@@ -353,7 +356,7 @@ export default function CreateGroupScreen() {
                     >
                       <Image
                         source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
-                        style={styles.modalItemImage}
+                        style={[styles.modalItemImage, { width: listItemImageSize, height: listItemImageSize }]}
                       />
                       <View style={styles.modalItemContent}>
                         <Text style={[styles.modalItemTitle, { color: colors.textPrimary }]}>{individual.title}</Text>

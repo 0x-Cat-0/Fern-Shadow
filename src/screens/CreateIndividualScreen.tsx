@@ -59,9 +59,13 @@ export default function CreateIndividualScreen() {
   const [groupPickerViewMode, setGroupPickerViewMode] = useState<'list' | 'grid'>('grid');
 
   // 弹窗高度
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const [modalHeight, setModalHeight] = useState(screenHeight * 0.5);
   const [isDragging, setIsDragging] = useState(false);
+
+  // 计算缩略图尺寸 - 根据屏幕宽度调整，小屏手机适当缩小
+  const thumbnailSize = Math.max(70, Math.min(100, screenWidth * 0.22));
+  const listItemImageSize = Math.max(45, Math.min(60, screenWidth * 0.14));
 
   // 拖动改变弹窗高度
   const panResponder = useRef(
@@ -313,7 +317,7 @@ export default function CreateIndividualScreen() {
         {selectedImages.map((image, index) => (
           <TouchableOpacity
             key={index}
-            style={styles.imageScrollItem}
+            style={[styles.imageScrollItem, { width: thumbnailSize, height: thumbnailSize }]}
             onPress={() => setCoverIndex(index)}
             onLongPress={() => {
               Alert.alert('删除图片', '确定要删除这张图片吗？', [
@@ -322,7 +326,7 @@ export default function CreateIndividualScreen() {
               ]);
             }}
           >
-            <Image source={{ uri: image.uri }} style={styles.scrollImage} resizeMode="cover" />
+            <Image source={{ uri: image.uri }} style={[styles.scrollImage, { width: thumbnailSize, height: thumbnailSize }]} resizeMode="cover" />
             {index === coverIndex && (
               <View style={styles.coverBadge}>
                 <Text style={styles.coverBadgeText}>封面</Text>
@@ -331,7 +335,7 @@ export default function CreateIndividualScreen() {
           </TouchableOpacity>
         ))}
         {/* 添加按钮 */}
-        <TouchableOpacity style={styles.addScrollBtn} onPress={showImageOptions}>
+        <TouchableOpacity style={[styles.addScrollBtn, { width: thumbnailSize, height: thumbnailSize }]} onPress={showImageOptions}>
           <Text style={styles.addScrollText}>+</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -365,7 +369,7 @@ export default function CreateIndividualScreen() {
           {/* 图片横向滚动 */}
           <View style={styles.imageSection}>
             {selectedImages.length > 0 ? renderImageScroll() : (
-              <TouchableOpacity style={styles.coverPlaceholder} onPress={showImageOptions}>
+              <TouchableOpacity style={[styles.coverPlaceholder, { width: thumbnailSize, height: thumbnailSize }]} onPress={showImageOptions}>
                 <Text style={styles.coverPlaceholderText}>+</Text>
               </TouchableOpacity>
             )}
@@ -526,7 +530,7 @@ export default function CreateIndividualScreen() {
                     >
                       <Image
                         source={group.coverImagePath ? { uri: group.coverImagePath } : require('../../assets/icons/fern.png')}
-                        style={styles.modalItemImage}
+                        style={[styles.modalItemImage, { width: listItemImageSize, height: listItemImageSize }]}
                       />
                       <View style={styles.modalItemContent}>
                         <Text style={[styles.modalItemTitle, { color: colors.textPrimary }]}>{group.title}</Text>

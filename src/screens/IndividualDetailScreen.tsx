@@ -28,7 +28,6 @@ import type { Individual, Record as RecordType, Group, RootStackParamList } from
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'IndividualDetail'>;
 type IndividualDetailRouteProp = RouteProp<RootStackParamList, 'IndividualDetail'>;
 
-const IMAGE_SIZE = 80;
 const IMAGE_GAP = 4;
 
 interface RecordItem {
@@ -48,6 +47,12 @@ export default function IndividualDetailScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const { individualId } = route.params;
+
+  // 计算图片网格尺寸 - 动态调整以适应不同屏幕
+  // 布局: dateSection(60) + nodeSection(16) + contentSection(padding 12) + 本组件paddingHorizontal(12)
+  // 在contentSection中显示4列图片
+  const contentAvailableWidth = screenWidth - 60 - 16 - 12 - 12;
+  const imageSize = Math.max(60, (contentAvailableWidth - 3 * IMAGE_GAP) / 4);
 
   const [individual, setIndividual] = useState<Individual | null>(null);
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -763,7 +768,7 @@ export default function IndividualDetailScreen() {
                   >
                     <Image
                       source={{ uri: path }}
-                      style={styles.recordImage}
+                      style={[styles.recordImage, { width: imageSize, height: imageSize }]}
                       resizeMode="cover"
                     />
                   </TouchableOpacity>
@@ -771,7 +776,7 @@ export default function IndividualDetailScreen() {
                 {/* 今天的记录显示添加按钮 */}
                 {isToday(item.dateTimestamp) && (
                   <TouchableOpacity
-                    style={[styles.recordImage, styles.addImageBtn]}
+                    style={[styles.recordImage, styles.addImageBtn, { width: imageSize, height: imageSize }]}
                     onPress={() => handleAddImage(item.id)}
                     activeOpacity={0.7}
                   >
@@ -782,7 +787,7 @@ export default function IndividualDetailScreen() {
             ) : isToday(item.dateTimestamp) ? (
               /* 今天无图片时显示占位符 */
               <TouchableOpacity
-                style={[styles.recordImage, styles.addImageBtn]}
+                style={[styles.recordImage, styles.addImageBtn, { width: imageSize, height: imageSize }]}
                 onPress={() => handleAddImage(item.id)}
                 activeOpacity={0.7}
               >
@@ -844,7 +849,7 @@ export default function IndividualDetailScreen() {
           </View>
           <View style={styles.contentSection}>
             <TouchableOpacity
-              style={[styles.recordImage, styles.addImageBtn]}
+              style={[styles.recordImage, styles.addImageBtn, { width: imageSize, height: imageSize }]}
               onPress={handleAddTodayRecord}
               activeOpacity={0.7}
             >
@@ -1356,8 +1361,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   recordImage: {
-    width: IMAGE_SIZE,
-    height: IMAGE_SIZE,
     borderRadius: 4,
     backgroundColor: '#e8e8e8',
   },

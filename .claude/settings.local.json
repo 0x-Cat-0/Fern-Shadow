@@ -4,7 +4,10 @@
       "Skill(update-config)",
       "Skill(update-config:*)",
       "Bash(./gradlew clean:*)",
-      "Bash(eas build:configure)"
+      "Bash(eas build:configure)",
+      "Bash(rm -rf node_modules/.cache)",
+      "Bash(rm -rf /tmp/metro-*)",
+      "Bash(eas update:*)"
     ]
   }
 }
