@@ -260,7 +260,7 @@ export default function CreateIndividualScreen() {
       const imageGroups = groupImagesByDate(imagesWithPermanentUri);
 
       const individualId = await IndividualRepository.create({
-        coverImagePath: imagesWithPermanentUri[0]?.permanentUri || 'https://picsum.photos/400/400',
+        coverImagePath: imagesWithPermanentUri[0]?.permanentUri || '',
         title: title.trim(),
         description: description.trim(),
         groupIds,
@@ -562,7 +562,7 @@ export default function CreateIndividualScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={{ uri: group.coverImagePath || 'https://picsum.photos/200/200' }}
+                            source={group.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (

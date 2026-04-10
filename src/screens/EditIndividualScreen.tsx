@@ -333,7 +333,7 @@ export default function EditIndividualScreen() {
                 if (updatedImages.length > 0) {
                   setCoverImagePath(updatedImages[0].imagePath);
                 } else {
-                  setCoverImagePath(individual?.coverImagePath || 'https://picsum.photos/400/400');
+                  setCoverImagePath(individual?.coverImagePath || '');
                 }
               }
 
@@ -655,7 +655,7 @@ export default function EditIndividualScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={{ uri: group.coverImagePath || 'https://picsum.photos/200/200' }}
+                            source={group.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (

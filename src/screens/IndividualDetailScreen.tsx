@@ -799,7 +799,7 @@ export default function IndividualDetailScreen() {
     <>
       <View style={styles.individualCard}>
         <Image
-          source={{ uri: individual?.coverImagePath || 'https://picsum.photos/200/200' }}
+          source={individual?.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
           style={styles.coverImage}
           resizeMode="cover"
         />

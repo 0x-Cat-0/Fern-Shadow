@@ -151,7 +151,7 @@ export default function EditGroupScreen() {
     try {
       const permanentUri = coverImagePath
         ? await copyImageToDocumentDirectory(coverImagePath)
-        : 'https://picsum.photos/400/400';
+        : '';
 
       await GroupRepository.update(groupId, {
         coverImagePath: permanentUri,
@@ -430,7 +430,7 @@ export default function EditGroupScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={{ uri: individual.coverImagePath || 'https://picsum.photos/200/200' }}
+                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (
