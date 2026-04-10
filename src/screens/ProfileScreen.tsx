@@ -112,7 +112,7 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
         {/* 头像区域 */}
         <View style={styles.profileSection}>
           <Image
-            source={require('../assets/icons/鹿角蕨.png')}
+            source={require('../../assets/icons/鹿角蕨.png')}
             style={styles.avatar}
             resizeMode="cover"
           />

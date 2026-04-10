@@ -2,15 +2,15 @@
   "expo": {
     "name": "蕨影",
     "slug": "zhang-ying",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "newArchEnabled": false,
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "icon": "./src/assets/icons/图标.png",
+    "icon": "./assets/icons/图标.png",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#ffffff",
-      "image": "./src/assets/icons/图标.png"
+      "image": "./assets/icons/图标.png"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -25,11 +25,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/icons/图标.png",
+        "foregroundImage": "./assets/icons/图标.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.zhangying.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"

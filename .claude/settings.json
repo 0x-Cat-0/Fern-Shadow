@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(npx eas:*)"
+      "Bash(npx eas:*)",
+      "Bash(mkdir -p assets/icons)",
+      "Bash(cp src/assets/icons/*.png assets/icons/)"
     ]
   }
 }

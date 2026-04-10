@@ -75,7 +75,7 @@ function TabContent() {
 
   // 监听导航状态变化，隐藏/显示底部导航
   useEffect(() => {
-    const unsubscribe = navigation.addListener('state', (e) => {
+    const unsubscribe = navigation.addListener('state', (e: any) => {
       const currentRouteName = e.data.state?.routes?.[e.data.state.index]?.name;
       // 在这些页面隐藏底部导航
       const hideNavRoutes = ['IndividualDetail', 'GroupDetail', 'CreateGroup', 'EditGroup', 'CreateIndividual', 'EditIndividual', 'CreateRecord', 'EditRecord'];

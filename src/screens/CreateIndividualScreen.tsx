@@ -525,7 +525,7 @@ export default function CreateIndividualScreen() {
                       }}
                     >
                       <Image
-                        source={group.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
+                        source={group.coverImagePath ? { uri: group.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
                         style={styles.modalItemImage}
                       />
                       <View style={styles.modalItemContent}>
@@ -562,7 +562,7 @@ export default function CreateIndividualScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={group.coverImagePath ? { uri: group.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
+                            source={group.coverImagePath ? { uri: group.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (

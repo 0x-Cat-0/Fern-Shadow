@@ -142,7 +142,7 @@ export default function CreateGroupScreen() {
 
       // 创建分组并获取新分组ID
       const newGroupId = await GroupRepository.create({
-        coverImagePath: permanentUri,
+        coverImagePath: permanentUri || '',
         title: title.trim(),
         description: description.trim(),
       });
@@ -352,7 +352,7 @@ export default function CreateGroupScreen() {
                       }}
                     >
                       <Image
-                        source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
+                        source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
                         style={styles.modalItemImage}
                       />
                       <View style={styles.modalItemContent}>
@@ -389,7 +389,7 @@ export default function CreateGroupScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../assets/icons/鹿角蕨.png')}
+                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (
