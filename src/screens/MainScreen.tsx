@@ -81,7 +81,7 @@ function WaterfallCard({
         activeOpacity={0.8}
       >
         <Image
-          source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+          source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/fern.png')}
           style={[styles.cardImage, { height: imageHeight }]}
           resizeMode="cover"
           onLoad={handleImageLoad}
@@ -95,7 +95,7 @@ function WaterfallCard({
               {item.description || '没有描述哦...'}
             </Text>
             <View style={styles.cardBrowse}>
-              <Image source={require('../../assets/icons/浏览.png')} style={styles.browseIcon} />
+              <Image source={require('../../assets/icons/view.png')} style={styles.browseIcon} />
               <Text style={[styles.browseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
             </View>
           </View>
@@ -171,7 +171,7 @@ function IndividualsView({
   if (individuals.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Image source={require('../../assets/icons/鹿角蕨.png')} style={styles.emptyImage} />
+        <Image source={require('../../assets/icons/fern.png')} style={styles.emptyImage} />
         <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
           点击下方中间加号添加植物
         </Text>
@@ -337,7 +337,7 @@ function GroupsView({
           </View>
         </ScrollView>
         <View style={[styles.emptyContainer, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}>
-          <Image source={require('../../assets/icons/鹿角蕨.png')} style={styles.emptyImage} />
+          <Image source={require('../../assets/icons/fern.png')} style={styles.emptyImage} />
           <Text style={[styles.emptyMessage, { color: colors.textSecondary }]}>
             点击上方灰色加号新建分组
           </Text>
@@ -394,7 +394,7 @@ function GroupsView({
                     activeOpacity={0.8}
                   >
                     <Image
-                      source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                      source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/fern.png')}
                       style={[styles.gridCardImage, { width: itemWidth, height: itemWidth }]}
                       resizeMode="cover"
                     />
@@ -407,7 +407,7 @@ function GroupsView({
                           {item.description || '没有描述哦...'}
                         </Text>
                         <View style={styles.gridCardBrowse}>
-                          <Image source={require('../../assets/icons/浏览.png')} style={styles.gridBrowseIcon} />
+                          <Image source={require('../../assets/icons/view.png')} style={styles.gridBrowseIcon} />
                           <Text style={[styles.gridBrowseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
                         </View>
                       </View>
@@ -583,7 +583,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
       <View style={{ height: insets.top, backgroundColor: '#ffffff' }} />
       <View style={[styles.headerContent, { paddingHorizontal: spacing.md * 2 }]}>
         <TouchableOpacity style={styles.leftBtn}>
-          <Image source={require('../../assets/icons/更多1.png')} style={{ width: 22, height: 22 }} />
+          <Image source={require('../../assets/icons/more1.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
 
         <View style={styles.tabs}>
@@ -627,7 +627,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
             {(sortType === 'hot' || sortType === 'least_hot') && (
               <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
             )}
-            <Image source={require('../../assets/icons/切换.png')} style={[styles.tabSwitchIcon, { display: sortType === 'hot' || sortType === 'least_hot' ? 'flex' : 'none' }]} />
+            <Image source={require('../../assets/icons/switch.png')} style={[styles.tabSwitchIcon, { display: sortType === 'hot' || sortType === 'least_hot' ? 'flex' : 'none' }]} />
           </TouchableOpacity>
 
           {/* 最近查看/最久未看 */}
@@ -652,12 +652,12 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
             {(sortType === 'latest' || sortType === 'oldest') && (
               <View style={[styles.tabUnderline, { backgroundColor: colors.primary }]} />
             )}
-            <Image source={require('../../assets/icons/切换.png')} style={[styles.tabSwitchIcon, { display: sortType === 'latest' || sortType === 'oldest' ? 'flex' : 'none' }]} />
+            <Image source={require('../../assets/icons/switch.png')} style={[styles.tabSwitchIcon, { display: sortType === 'latest' || sortType === 'oldest' ? 'flex' : 'none' }]} />
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity onPress={toggleSearch} style={styles.rightBtn}>
-          <Image source={require('../../assets/icons/搜索.png')} style={{ width: 22, height: 22 }} />
+          <Image source={require('../../assets/icons/search.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
       </View>
 

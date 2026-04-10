@@ -352,7 +352,7 @@ export default function CreateGroupScreen() {
                       }}
                     >
                       <Image
-                        source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                        source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
                         style={styles.modalItemImage}
                       />
                       <View style={styles.modalItemContent}>
@@ -389,7 +389,7 @@ export default function CreateGroupScreen() {
                       >
                         <View style={styles.modalGridCardInner}>
                           <Image
-                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
                             style={styles.modalGridCardImage}
                           />
                           {!isSelected && (

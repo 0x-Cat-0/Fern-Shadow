@@ -6,11 +6,11 @@
     "newArchEnabled": false,
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/icons/图标.png",
+    "icon": "./assets/icons/icon.png",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#ffffff",
-      "image": "./assets/icons/图标.png"
+      "image": "./assets/icons/icon.png"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -25,7 +25,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icons/图标.png",
+        "foregroundImage": "./assets/icons/icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.zhangying.app",

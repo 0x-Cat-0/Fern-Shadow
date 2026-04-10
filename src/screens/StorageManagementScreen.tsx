@@ -114,7 +114,7 @@ export default function StorageManagementScreen({ onClose }: Props) {
                 {index > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
                 <View style={styles.listItem}>
                   <Image
-                    source={item.coverImage ? { uri: item.coverImage } : require('../../assets/icons/鹿角蕨.png')}
+                    source={item.coverImage ? { uri: item.coverImage } : require('../../assets/icons/fern.png')}
                     style={styles.itemCover}
                     resizeMode="cover"
                   />

@@ -280,7 +280,7 @@ export default function GroupDetailScreen() {
           onPress={() => navigation.navigate('EditGroup', { groupId })}
           style={stylesDetail.editBtn}
         >
-          <Image source={require('../../assets/icons/编辑.png')} style={{ width: 22, height: 22 }} />
+          <Image source={require('../../assets/icons/edit.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
       </View>
 
@@ -299,7 +299,7 @@ export default function GroupDetailScreen() {
         {/* 封面图 */}
         <View style={stylesDetail.coverSection}>
           <Image
-            source={group?.coverImagePath ? { uri: group.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+            source={group?.coverImagePath ? { uri: group.coverImagePath } : require('../../assets/icons/fern.png')}
             style={stylesDetail.coverImage}
             resizeMode="cover"
           />
@@ -372,7 +372,7 @@ export default function GroupDetailScreen() {
                     >
                       {/* 封面图 */}
                       <Image
-                        source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                        source={item.coverImagePath ? { uri: item.coverImagePath } : require('../../assets/icons/fern.png')}
                         style={stylesDetail.cardImage}
                         resizeMode="cover"
                       />
@@ -387,7 +387,7 @@ export default function GroupDetailScreen() {
                           </Text>
                         </View>
                         <View style={stylesDetail.cardInfoRight}>
-                          <Image source={require('../../assets/icons/浏览.png')} style={stylesDetail.browseIcon} />
+                          <Image source={require('../../assets/icons/view.png')} style={stylesDetail.browseIcon} />
                           <Text style={[stylesDetail.browseCount, { color: colors.textSecondary }]}>{item.viewCount}</Text>
                         </View>
                       </View>
@@ -490,7 +490,7 @@ export default function GroupDetailScreen() {
                     onPress={() => toggleIndividualSelection(individual.id)}
                   >
                     <Image
-                      source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                      source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
                       style={stylesDetail.modalItemImage}
                     />
                     <View style={stylesDetail.modalItemContent}>
@@ -528,7 +528,7 @@ export default function GroupDetailScreen() {
                       >
                         <View style={stylesDetail.modalGridCardInner}>
                           <Image
-                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+                            source={individual.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
                             style={stylesDetail.modalGridCardImage}
                           />
                           {!isSelected && (

@@ -38,7 +38,7 @@ export function SearchBar({
         style,
       ]}
     >
-      <Image source={require('../../assets/icons/搜索.png')} style={styles.icon} />
+      <Image source={require('../../assets/icons/search.png')} style={styles.icon} />
       <TextInput
         style={[styles.input, { color: colors.textPrimary }]}
         value={value}

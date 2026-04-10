@@ -799,7 +799,7 @@ export default function IndividualDetailScreen() {
     <>
       <View style={styles.individualCard}>
         <Image
-          source={individual?.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/鹿角蕨.png')}
+          source={individual?.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
           style={styles.coverImage}
           resizeMode="cover"
         />
@@ -817,7 +817,7 @@ export default function IndividualDetailScreen() {
               已经陪伴{getDaysSinceCreation()}天 · 上次记录{getDaysSinceLastRecord()}天前
             </Text>
             <Text style={[styles.individualStats, { color: '#999999' }]}>
-              {records.length} 条记录 · 共{records.reduce((sum, r) => sum + r.imagePaths.length, 0)}张图片 · <Image source={require('../../assets/icons/浏览.png')} style={{width: 12, height: 12}} /> {individual?.viewCount || 0}
+              {records.length} 条记录 · 共{records.reduce((sum, r) => sum + r.imagePaths.length, 0)}张图片 · <Image source={require('../../assets/icons/view.png')} style={{width: 12, height: 12}} /> {individual?.viewCount || 0}
             </Text>
           </View>
         </View>
@@ -888,13 +888,13 @@ export default function IndividualDetailScreen() {
 
       <View style={[styles.topBar, { backgroundColor: colors.surface }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Image source={require('../../assets/icons/返回.png')} style={{ width: 22, height: 22 }} />
+          <Image source={require('../../assets/icons/back.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: '#333333' }]} numberOfLines={1}>
           {individual?.title}
         </Text>
         <TouchableOpacity style={styles.moreBtn} onPress={() => navigation.navigate('EditIndividual', { individualId })}>
-          <Image source={require('../../assets/icons/编辑.png')} style={{ width: 22, height: 22 }} />
+          <Image source={require('../../assets/icons/edit.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
       </View>
 

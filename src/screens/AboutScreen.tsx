@@ -29,7 +29,7 @@ export default function AboutScreen({ onClose }: Props) {
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
         <View style={styles.logoSection}>
           <Image
-            source={require('../../assets/icons/鹿角蕨.png')}
+            source={require('../../assets/icons/fern.png')}
             style={styles.logo}
             resizeMode="cover"
           />
