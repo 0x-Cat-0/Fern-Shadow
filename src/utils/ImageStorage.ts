@@ -1,18 +1,27 @@
-import { File, Directory, Paths } from 'expo-file-system';
+import {
+  getInfoAsync,
+  makeDirectoryAsync,
+  copyAsync,
+  deleteAsync,
+  readDirectoryAsync,
+  documentDirectory,
+} from 'expo-file-system/legacy';
 
 const IMAGE_DIRECTORY_NAME = 'images';
 
-// 获取图片目录
-function getImageDirectory(): Directory {
-  return new Directory(Paths.document, IMAGE_DIRECTORY_NAME);
+// 获取图片目录路径
+export function getImageDirectoryPath(): string {
+  return `${documentDirectory}${IMAGE_DIRECTORY_NAME}/`;
 }
 
 // 确保目录存在
 function ensureDirectoryExists(): void {
-  const dir = getImageDirectory();
-  if (!dir.exists) {
-    dir.create();
-  }
+  const dir = getImageDirectoryPath();
+  getInfoAsync(dir).then(dirInfo => {
+    if (!dirInfo.exists) {
+      makeDirectoryAsync(dir, { intermediates: true });
+    }
+  });
 }
 
 // 从 URI 复制图片到文档目录
@@ -25,14 +34,16 @@ export async function copyImageToDocumentDirectory(sourceUri: string): Promise<s
   const extension = getFileExtension(sourceUri) || 'jpg';
   const filename = `${timestamp}_${random}.${extension}`;
 
-  const destinationDir = getImageDirectory();
-  const destinationFile = new File(destinationDir, filename);
+  const destinationDir = getImageDirectoryPath();
+  const destinationPath = `${destinationDir}${filename}`;
 
   // 复制文件
-  const sourceFile = new File(sourceUri);
-  sourceFile.copy(destinationFile);
+  await copyAsync({
+    from: sourceUri,
+    to: destinationPath,
+  });
 
-  return destinationFile.uri;
+  return destinationPath;
 }
 
 // 批量复制图片到文档目录
@@ -48,9 +59,9 @@ export async function copyImagesToDocumentDirectory(sourceUris: string[]): Promi
 // 删除图片
 export async function deleteImage(imagePath: string): Promise<void> {
   try {
-    const file = new File(imagePath);
-    if (file.exists) {
-      file.delete();
+    const fileInfo = await getInfoAsync(imagePath);
+    if (fileInfo.exists) {
+      await deleteAsync(imagePath);
     }
   } catch (error) {
     console.warn('Failed to delete image:', error);
@@ -71,29 +82,25 @@ function getFileExtension(uri: string): string | null {
 // 检查图片是否存在
 export async function imageExists(imagePath: string): Promise<boolean> {
   try {
-    const file = new File(imagePath);
-    return file.exists;
+    const fileInfo = await getInfoAsync(imagePath);
+    return fileInfo.exists;
   } catch {
     return false;
   }
 }
 
-// 获取图片目录路径
-export function getImageDirectoryPath(): string {
-  return getImageDirectory().uri;
-}
-
-// 清理不再使用的图片（可选的维护函数）
+// 清理不再使用的图片
 export async function cleanupUnusedImages(usedPaths: string[]): Promise<void> {
   try {
     ensureDirectoryExists();
-    const dir = getImageDirectory();
-    const files = dir.list();
+    const imageDir = getImageDirectoryPath();
+    const files = await readDirectoryAsync(imageDir);
     const usedSet = new Set(usedPaths);
 
-    for (const file of files) {
-      if (file instanceof File && !usedSet.has(file.uri)) {
-        file.delete();
+    for (const fileName of files) {
+      const filePath = `${imageDir}${fileName}`;
+      if (!usedSet.has(filePath)) {
+        await deleteAsync(filePath);
       }
     }
   } catch (error) {

@@ -19,6 +19,9 @@ import CreateIndividualScreen from './src/screens/CreateIndividualScreen';
 import EditIndividualScreen from './src/screens/EditIndividualScreen';
 import CreateRecordScreen from './src/screens/CreateRecordScreen';
 import EditRecordScreen from './src/screens/EditRecordScreen';
+import HelpScreen from './src/screens/HelpScreen';
+import AboutScreen from './src/screens/AboutScreen';
+import StorageManagementScreen from './src/screens/StorageManagementScreen';
 import type { RootStackParamList } from './src/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -66,6 +69,9 @@ function TabContent() {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [showImagePickerModal, setShowImagePickerModal] = useState(false);
   const [hideBottomNav, setHideBottomNav] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [showStorageModal, setShowStorageModal] = useState(false);
 
   // 监听导航状态变化，隐藏/显示底部导航
   useEffect(() => {
@@ -91,12 +97,18 @@ function TabContent() {
     setCurrentTab(tab);
   };
 
+  const profileProps = {
+    onHelpPress: () => setShowHelpModal(true),
+    onAboutPress: () => setShowAboutModal(true),
+    onStoragePress: () => setShowStorageModal(true),
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         {currentTab === 'main' && <MainStack viewMode={viewMode} />}
         {currentTab === 'community' && <CommunityScreen />}
-        {currentTab === 'profile' && <ProfileScreen />}
+        {currentTab === 'profile' && <ProfileScreen {...profileProps} />}
       </View>
 
       {/* 底部导航 - 当hideBottomNav为true时隐藏 */}
@@ -159,7 +171,7 @@ function TabContent() {
       <Modal
         visible={showImagePickerModal}
         transparent
-        animationType="fade"
+        animationType="none"
         statusBarTranslucent
         onRequestClose={() => setShowImagePickerModal(false)}
       >
@@ -189,6 +201,39 @@ function TabContent() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* 使用帮助弹窗 */}
+      <Modal
+        visible={showHelpModal}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setShowHelpModal(false)}
+      >
+        <HelpScreen onClose={() => setShowHelpModal(false)} />
+      </Modal>
+
+      {/* 关于我们弹窗 */}
+      <Modal
+        visible={showAboutModal}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setShowAboutModal(false)}
+      >
+        <AboutScreen onClose={() => setShowAboutModal(false)} />
+      </Modal>
+
+      {/* 存储管理弹窗 */}
+      <Modal
+        visible={showStorageModal}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setShowStorageModal(false)}
+      >
+        <StorageManagementScreen onClose={() => setShowStorageModal(false)} />
       </Modal>
     </View>
   );
@@ -262,9 +307,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   plusBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 42,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },

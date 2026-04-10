@@ -54,4 +54,5 @@ export type RootStackParamList = {
   EditIndividual: { individualId: number };
   CreateRecord: { individualId: number };
   EditRecord: { recordId: number };
+  StorageManagement: undefined;
 };
