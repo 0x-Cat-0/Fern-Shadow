@@ -1,43 +1,50 @@
 {
   "expo": {
-    "name": "植物记录相机",
-    "slug": "plant-recorder",
+    "name": "蕨影",
+    "slug": "zhang-ying",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "icon": "./src/assets/icons/图标.png",
     "splash": {
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffffff",
+      "image": "./src/assets/icons/图标.png"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.plantrecorder.app"
+      "bundleIdentifier": "com.zhangying.app",
+      "infoPlist": {
+        "CFBundleDisplayName": "蕨影",
+        "CFBundleName": "FernShadow"
+      }
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icons/图标.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.plantrecorder.app",
-      "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES"
-      ]
+      "package": "com.zhangying.app",
+      "versionCode": 1
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_APP_START",
+      "fallbackToCacheTimeout": 0
     },
     "plugins": [
       [
         "expo-image-picker",
         {
-          "photosPermission": "植物记录相机需要访问您的相册来选择植物照片。",
-          "cameraPermission": "植物记录相机需要访问您的相机来拍摄植物照片。"
+          "photosPermission": "蕨影需要访问您的相册来选择植物照片。",
+          "cameraPermission": "蕨影需要访问您的相机来拍摄植物照片。"
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "植物记录相机需要访问您的相机来拍摄植物照片。"
+          "cameraPermission": "蕨影需要访问您的相机来拍摄植物照片。"
         }
       ],
       [
