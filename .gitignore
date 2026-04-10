@@ -5,3 +5,5 @@ dist
 *.log
 web_reference
 android
+.idea
+.claude
