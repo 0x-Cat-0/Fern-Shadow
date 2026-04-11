@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npx eas:*)",
+      "Bash(mkdir -p assets/icons)",
+      "Bash(cp src/assets/icons/*.png assets/icons/)",
+      "Bash(mv \"鹿角蕨.png\" fern.png)",
+      "Bash(mv \"浏览.png\" view.png)",
+      "Bash(mv \"编辑.png\" edit.png)",
+      "Bash(mv \"返回.png\" back.png)",
+      "Bash(mv \"搜索.png\" search.png)",
+      "Bash(xargs sed:*)"
+    ]
+  }
+}

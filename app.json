@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "蕨影",
+    "slug": "zhang-ying",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icons/icon.png",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "image": "./assets/icons/icon.png"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zhangying.app",
+      "infoPlist": {
+        "CFBundleDisplayName": "蕨影",
+        "CFBundleName": "FernShadow"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.zhangying.app",
+      "versionCode": 5,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ]
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "蕨影需要访问您的相册来选择植物照片。",
+          "cameraPermission": "蕨影需要访问您的相机来拍摄植物照片。"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "蕨影需要访问您的相机来拍摄植物照片。"
+        }
+      ],
+      [
+        "expo-sqlite"
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bb5dc2b9-8273-439b-95ed-91b8a64b9a26"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bb5dc2b9-8273-439b-95ed-91b8a64b9a26"
+    }
+  }
+}

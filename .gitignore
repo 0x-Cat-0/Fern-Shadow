@@ -1,1 +1,9 @@
-/.claude
+node_modules
+.expo
+dist
+.DS_Store
+*.log
+web_reference
+android
+.idea
+.claude
