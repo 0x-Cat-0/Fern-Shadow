@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -479,6 +480,12 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
   const [searchVisible, setSearchVisible] = useState(false);
   const [selectedIndividualId, setSelectedIndividualId] = useState<number | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [showToast, setShowToast] = useState(false);
+
+  const handleLeftBtnPress = () => {
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 1000);
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -582,7 +589,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
     <View style={styles.header}>
       <View style={{ height: insets.top, backgroundColor: '#ffffff' }} />
       <View style={[styles.headerContent, { paddingHorizontal: spacing.md * 2 }]}>
-        <TouchableOpacity style={styles.leftBtn}>
+        <TouchableOpacity style={styles.leftBtn} onPress={handleLeftBtnPress}>
           <Image source={require('../../assets/icons/more1.png')} style={{ width: 22, height: 22 }} />
         </TouchableOpacity>
 
@@ -675,6 +682,7 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
   );
 
   return (
+    <>
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {renderHeader()}
       {loading ? null : viewMode === 'all' ? (
@@ -705,6 +713,26 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
         />
       )}
     </View>
+
+    {/* Toast提示 */}
+    <Modal
+      visible={showToast}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => setShowToast(false)}
+    >
+      <TouchableOpacity
+        style={toastStyles.overlay}
+        activeOpacity={1}
+        onPress={() => setShowToast(false)}
+      >
+        <View style={toastStyles.toast}>
+          <Text style={toastStyles.toastText}>此功能开发中</Text>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+    </>
   );
 }
 
@@ -1007,5 +1035,24 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#adadad',
     fontWeight: '300',
+  },
+});
+
+const toastStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toast: {
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  toastText: {
+    color: '#ffffff',
+    fontSize: 15,
   },
 });

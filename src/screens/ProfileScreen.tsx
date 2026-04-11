@@ -182,7 +182,7 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
 
         {/* 版本信息 */}
         <View style={styles.versionSection}>
-          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.0.3</Text>
+          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.1.0</Text>
         </View>
       </ScrollView>
 

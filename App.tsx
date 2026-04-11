@@ -249,22 +249,26 @@ export default function App() {
         if (!isDatabaseInitialized()) {
           await initDatabase();
         }
+      } catch (error) {
+        console.error('Failed to initialize:', error);
+      }
+      setIsReady(true);
+    }
+    init();
 
-        // 检查并下载热更新
+    // 启动后后台检查更新，不阻塞UI
+    async function checkUpdate() {
+      try {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
-          // 有更新时，下次启动应用
           await Updates.reloadAsync();
         }
-
-        setIsReady(true);
       } catch (error) {
-        console.error('Failed to initialize:', error);
-        setIsReady(true);
+        console.error('Update check failed:', error);
       }
     }
-    init();
+    checkUpdate();
   }, []);
 
   if (!isReady) {
