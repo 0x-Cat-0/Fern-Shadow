@@ -105,7 +105,7 @@ function TabContent() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: hideBottomNav ? 0 : insets.bottom }]}>
       <View style={styles.content}>
         {currentTab === 'main' && <MainStack viewMode={viewMode} />}
         {currentTab === 'community' && <CommunityScreen />}
@@ -114,58 +114,58 @@ function TabContent() {
 
       {/* 底部导航 - 当hideBottomNav为true时隐藏 */}
       {!hideBottomNav && (
-        <View style={[styles.bottomNav, { paddingBottom: insets.bottom, backgroundColor: colors.surface }]}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            handleTabPress('main');
-            setViewMode('all');
-          }}
-        >
-          <Text style={[styles.navText, { color: currentTab === 'main' && viewMode === 'all' ? colors.primary : colors.textDisabled }]}>
-            全部
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.bottomNav}>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => {
+              handleTabPress('main');
+              setViewMode('all');
+            }}
+          >
+            <Text style={[styles.navText, { color: currentTab === 'main' && viewMode === 'all' ? colors.primary : colors.textDisabled }]}>
+              全部
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {
-            handleTabPress('main');
-            setViewMode('groups');
-          }}
-        >
-          <Text style={[styles.navText, { color: currentTab === 'main' && viewMode === 'groups' ? colors.primary : colors.textDisabled }]}>
-            分组
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => {
+              handleTabPress('main');
+              setViewMode('groups');
+            }}
+          >
+            <Text style={[styles.navText, { color: currentTab === 'main' && viewMode === 'groups' ? colors.primary : colors.textDisabled }]}>
+              分组
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={handleCreate}
-        >
-          <View style={[styles.plusBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.plusIcon}>+</Text>
-          </View>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.plusBtn}
+            onPress={handleCreate}
+          >
+            <View style={[styles.plusBtnInner, { backgroundColor: colors.primary }]}>
+              <Text style={styles.plusIcon}>+</Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => handleTabPress('community')}
-        >
-          <Text style={[styles.navText, { color: currentTab === 'community' ? colors.primary : colors.textDisabled }]}>
-            社区
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => handleTabPress('community')}
+          >
+            <Text style={[styles.navText, { color: currentTab === 'community' ? colors.primary : colors.textDisabled }]}>
+              社区
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => handleTabPress('profile')}
-        >
-          <Text style={[styles.navText, { color: currentTab === 'profile' ? colors.primary : colors.textDisabled }]}>
-            我
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => handleTabPress('profile')}
+          >
+            <Text style={[styles.navText, { color: currentTab === 'profile' ? colors.primary : colors.textDisabled }]}>
+              我
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* 图片来源选择弹窗 */}
@@ -300,27 +300,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     height: 50,
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
+    justifyContent: 'space-around',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: lightColors.border,
+    backgroundColor: lightColors.surface,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    height: 50,
   },
   navText: {
     fontSize: 12,
   },
   plusBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+  },
+  plusBtnInner: {
     width: 50,
     height: 42,
     borderRadius: 12,

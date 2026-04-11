@@ -35,7 +35,7 @@ export default function AboutScreen({ onClose }: Props) {
           />
           <Text style={[styles.appName, { color: colors.textPrimary }]}>蕨影</Text>
           <Text style={[styles.appSubName, { color: colors.textSecondary }]}>FernShadow</Text>
-          <Text style={[styles.version, { color: colors.textDisabled }]}>版本 1.1.0</Text>
+          <Text style={[styles.version, { color: colors.textDisabled }]}>版本 1.1.1</Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: colors.surface }]}>
