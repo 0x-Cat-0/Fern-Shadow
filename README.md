@@ -56,7 +56,7 @@ npm run ios
 
 ## 下载
 
-- [Android APK 下载](https://expo.dev/artifacts/eas/syZTRPKzVGrPS2mZRvLEnL.apk)
+- [Android APK 下载](https://expo.dev/artifacts/eas/pszGRECPc1ZTfkwtN1V3b6.apk)
 
 ## 问题反馈
 
