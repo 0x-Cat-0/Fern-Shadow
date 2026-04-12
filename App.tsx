@@ -48,7 +48,6 @@ function MainStack({ viewMode, onLeftBtnPress }: { viewMode: ViewMode; onLeftBtn
       <Stack.Screen name="IndividualDetail" component={IndividualDetailScreen} />
       <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
       <Stack.Screen name="EditGroup" component={EditGroupScreen} />
-      <Stack.Screen name="CreateIndividual" component={CreateIndividualScreen} />
       <Stack.Screen name="EditIndividual" component={EditIndividualScreen} />
       <Stack.Screen name="CreateRecord" component={CreateRecordScreen} />
       <Stack.Screen name="EditRecord" component={EditRecordScreen} />
@@ -95,10 +94,6 @@ function TabContent() {
   }, [navigation]);
 
   const handleCreate = () => {
-    // 先切换到 main tab
-    setCurrentTab('main');
-    setViewMode('all');
-    // 再显示图片选择弹窗
     setShowImagePickerModal(true);
   };
 
@@ -263,6 +258,28 @@ function TabContent() {
   );
 }
 
+function RootStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        contentStyle: { backgroundColor: lightColors.background },
+      }}
+    >
+      <Stack.Screen name="TabContainer" component={TabContent} />
+      <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
+      <Stack.Screen name="IndividualDetail" component={IndividualDetailScreen} />
+      <Stack.Screen name="CreateGroup" component={CreateGroupScreen} />
+      <Stack.Screen name="EditGroup" component={EditGroupScreen} />
+      <Stack.Screen name="CreateIndividual" component={CreateIndividualScreen} />
+      <Stack.Screen name="EditIndividual" component={EditIndividualScreen} />
+      <Stack.Screen name="CreateRecord" component={CreateRecordScreen} />
+      <Stack.Screen name="EditRecord" component={EditRecordScreen} />
+    </Stack.Navigator>
+  );
+}
+
 export default function App() {
   const [isReady, setIsReady] = useState(false);
 
@@ -303,7 +320,7 @@ export default function App() {
       <ThemeProvider>
         <StatusBar barStyle="dark-content" backgroundColor={lightColors.background} />
         <NavigationContainer>
-          <TabContent />
+          <RootStack />
         </NavigationContainer>
       </ThemeProvider>
     </SafeAreaProvider>
