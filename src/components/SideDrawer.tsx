@@ -4,12 +4,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Switch,
   Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
-import { useSettingsStore } from '../store/settingsStore';
 
 interface SideDrawerProps {
   visible: boolean;
@@ -21,7 +19,6 @@ const DRAWER_WIDTH = 280;
 export function SideDrawer({ visible, onClose }: SideDrawerProps) {
   const colors = useTheme();
   const insets = useSafeAreaInsets();
-  const { copyImageToApp, setCopyImageToApp } = useSettingsStore();
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [isRendered, setIsRendered] = useState(false);
@@ -90,22 +87,9 @@ export function SideDrawer({ visible, onClose }: SideDrawerProps) {
         <View style={styles.drawerContent}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>设置</Text>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
-                复制图片到应用目录
-              </Text>
-              <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>
-                关闭则直接使用原图路径，加载更快但原图删除后无法显示
-              </Text>
-            </View>
-            <Switch
-              value={copyImageToApp}
-              onValueChange={setCopyImageToApp}
-              trackColor={{ false: '#e0e0e0', true: colors.primary }}
-              thumbColor="#fff"
-            />
-          </View>
+          <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>
+            图片已设置为始终复制到应用目录
+          </Text>
         </View>
 
         <TouchableOpacity

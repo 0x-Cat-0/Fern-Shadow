@@ -95,6 +95,10 @@ function TabContent() {
   }, [navigation]);
 
   const handleCreate = () => {
+    // 先切换到 main tab
+    setCurrentTab('main');
+    setViewMode('all');
+    // 再显示图片选择弹窗
     setShowImagePickerModal(true);
   };
 

@@ -63,14 +63,10 @@ export function ImagePickerButton({
       type === 'camera'
         ? await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
             quality: 1,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
             quality: 1,
           });
 

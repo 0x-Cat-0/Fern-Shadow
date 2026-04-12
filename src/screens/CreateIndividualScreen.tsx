@@ -253,6 +253,7 @@ export default function CreateIndividualScreen() {
 
     setSaving(true);
     try {
+      // 始终复制到文档目录以保证可靠性
       const sourceUris = selectedImages.map(img => img.uri);
       const permanentUris = await copyImagesToDocumentDirectory(sourceUris);
 

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository } from '../database/repositories';
-import { getFileSize, formatFileSize } from '../utils/StorageUtils';
+import { getFileSize, formatFileSize, getImageLibrarySize, getCacheSize, clearCache } from '../utils/StorageUtils';
 
 interface Props {
   onClose: () => void;
@@ -23,12 +23,49 @@ export default function StorageManagementScreen({ onClose }: Props) {
 
   const [totalSize, setTotalSize] = useState(0);
   const [totalImages, setTotalImages] = useState(0);
+  const [savedImageSize, setSavedImageSize] = useState(0);
+  const [savedImageCount, setSavedImageCount] = useState(0);
+  const [cacheSize, setCacheSize] = useState(0);
   const [storageList, setStorageList] = useState<StorageItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadStorageData();
+    loadStorageStats();
   }, []);
+
+  const loadStorageStats = async () => {
+    const [imageLibrary, cache] = await Promise.all([
+      getImageLibrarySize(),
+      getCacheSize(),
+    ]);
+    setSavedImageSize(imageLibrary.used);
+    setSavedImageCount(imageLibrary.imageCount);
+    setCacheSize(cache);
+  };
+
+  const handleClearCache = () => {
+    Alert.alert(
+      '清除缓存',
+      '确定要清除临时缓存吗？不会影响已保存的图片。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '清除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearCache();
+              setCacheSize(0);
+              Alert.alert('成功', '缓存已清除');
+            } catch (error) {
+              Alert.alert('错误', '清除缓存失败');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const loadStorageData = async () => {
     try {
@@ -101,6 +138,22 @@ export default function StorageManagementScreen({ onClose }: Props) {
             <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>照片数量</Text>
             <Text style={[styles.overviewValue, { color: colors.textPrimary }]}>{totalImages} 张</Text>
           </View>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={styles.overviewRow}>
+            <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>已保存图片</Text>
+            <Text style={[styles.overviewValue, { color: colors.textPrimary }]}>{formatFileSize(savedImageSize)} ({savedImageCount}张)</Text>
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={styles.overviewRow}>
+            <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>缓存大小</Text>
+            <Text style={[styles.overviewValue, { color: colors.textPrimary }]}>{formatFileSize(cacheSize)}</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.clearCacheBtn, { backgroundColor: colors.primary + '15' }]}
+            onPress={handleClearCache}
+          >
+            <Text style={[styles.clearCacheText, { color: colors.primary }]}>清除缓存</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 存储列表 */}
@@ -224,5 +277,15 @@ const styles = StyleSheet.create({
   },
   itemSize: {
     fontSize: 13,
+  },
+  clearCacheBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  clearCacheText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

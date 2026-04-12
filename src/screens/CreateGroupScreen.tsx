@@ -138,6 +138,7 @@ export default function CreateGroupScreen() {
 
     setSaving(true);
     try {
+      // 始终复制到文档目录以保证可靠性
       let permanentUri: string | undefined;
       if (coverImagePath) {
         permanentUri = await copyImageToDocumentDirectory(coverImagePath);

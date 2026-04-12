@@ -18,7 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Header, ImagePickerButton, ConfirmDialog } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { RecordRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
+import { copyImageToDocumentDirectory, deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { Record as RecordType, RootStackParamList } from '../types';
@@ -73,6 +73,7 @@ export default function EditRecordScreen() {
       // 如果图片改变了，复制到文档目录
       let finalImagePath = originalImagePath;
       if (imagePath !== originalImagePath) {
+        // 始终复制到文档目录以保证可靠性
         finalImagePath = await copyImageToDocumentDirectory(imagePath);
       }
 
@@ -92,6 +93,19 @@ export default function EditRecordScreen() {
 
   const handleDelete = async () => {
     try {
+      // 获取记录的图片路径并删除本地文件
+      const record = await RecordRepository.findById(recordId);
+      if (record) {
+        const paths: string[] = Array.isArray(record.imagePath)
+          ? record.imagePath
+          : record.imagePath ? [record.imagePath] : [];
+        // 删除本地文件（只删除 documents/images/ 目录下的文件）
+        for (const path of paths) {
+          if (path.startsWith(getImageDirectoryPath())) {
+            await deleteImage(path);
+          }
+        }
+      }
       await RecordRepository.delete(recordId);
       navigation.goBack();
     } catch (error) {

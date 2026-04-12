@@ -209,6 +209,7 @@ export default function EditIndividualScreen() {
 
         // 分别保存每个日期组的图片
         for (const [dayKey, uris] of imagesByDate) {
+          // 始终复制到文档目录以保证可靠性
           const permanentUris = await Promise.all(uris.map(uri => copyImageToDocumentDirectory(uri)));
 
           // 查找目标日期是否有记录
@@ -264,6 +265,7 @@ export default function EditIndividualScreen() {
         const asset = result.assets[0];
         const timestamp = getImageCreationTime(asset);
         const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
+        // 始终复制到文档目录以保证可靠性
         const permanentUri = await copyImageToDocumentDirectory(asset.uri);
 
         // 获取当前所有记录

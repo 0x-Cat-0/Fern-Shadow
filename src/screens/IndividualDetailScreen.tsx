@@ -22,7 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
+import { copyImageToDocumentDirectory, deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
 import type { Individual, Record as RecordType, Group, RootStackParamList } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'IndividualDetail'>;
@@ -166,18 +166,7 @@ export default function IndividualDetailScreen() {
     }, [loadData])
   );
 
-  // 当图片索引改变时，滚动到对应位置
-  useEffect(() => {
-    if (viewingImageIndex !== null && scrollViewRef.current) {
-      // 延迟滚动，确保 Modal 已完全打开
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({
-          x: viewingImageIndex * screenWidth,
-          animated: false,
-        });
-      }, 100);
-    }
-  }, [viewingImageIndex, screenWidth]);
+  // 当图片索引改变时，FlatList 使用 initialScrollIndex 自动处理
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -318,7 +307,9 @@ export default function IndividualDetailScreen() {
     if (!result.canceled && result.assets.length > 0) {
       const asset = result.assets[0];
       const timestamp = getImageCreationTime(asset);
-      await saveNewImages([asset.uri], timestamp);
+      // 复制到文档目录获取永久路径
+      const permanentUri = await copyImageToDocumentDirectory(asset.uri);
+      await saveNewImages([permanentUri], timestamp);
     }
   };
 
@@ -332,7 +323,7 @@ export default function IndividualDetailScreen() {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 1,
-      exif: true, // 请求EXIF数据
+      exif: true,
     });
 
     if (!result.canceled && result.assets.length > 0) {
@@ -352,8 +343,9 @@ export default function IndividualDetailScreen() {
         imagesByDate.get(dayKey)!.push(uri);
       }
 
-      // 将图片复制到文档目录
+      // 复制到文档目录
       const permanentUrisByDate = new Map<number, string[]>();
+
       for (const [dayKey, uris] of imagesByDate) {
         const permanentUris = await Promise.all(uris.map(uri => copyImageToDocumentDirectory(uri)));
         permanentUrisByDate.set(dayKey, permanentUris);
@@ -431,35 +423,31 @@ export default function IndividualDetailScreen() {
     if (uris.length === 0) return;
 
     try {
-      // 先将图片复制到文档目录，获取永久 URI
-      const permanentUris = await Promise.all(uris.map(uri => copyImageToDocumentDirectory(uri)));
-
-      // 查找是否有相同日期的记录
-      const existingRecord = records.find(r => isSameDay(timestamp, r.dateTimestamp));
+      // 查询数据库确认当天是否有记录（不依赖本地records状态）
+      const existingRecords = await RecordRepository.findByIndividualId(individualId);
+      const existingRecord = existingRecords.find(r => isSameDay(timestamp, r.recordDate));
 
       if (existingRecord) {
         // 有相同日期的记录：添加到该记录
-        const record = await RecordRepository.findById(existingRecord.id);
-        if (record) {
-          const existingPaths: string[] = Array.isArray(record.imagePath)
-            ? record.imagePath
-            : record.imagePath ? [record.imagePath] : [];
-          const newPaths = [...existingPaths, ...permanentUris];
-          await RecordRepository.update(existingRecord.id, { imagePath: newPaths });
-        }
+        const existingPaths: string[] = Array.isArray(existingRecord.imagePath)
+          ? existingRecord.imagePath
+          : existingRecord.imagePath ? [existingRecord.imagePath] : [];
+        const newPaths = [...existingPaths, ...uris];
+        await RecordRepository.update(existingRecord.id, { imagePath: newPaths });
       } else {
         // 没有相同日期的记录：创建新记录
         const imageDate = new Date(timestamp);
         const dateStr = `${String(imageDate.getMonth() + 1).padStart(2, '0')}.${String(imageDate.getDate()).padStart(2, '0')}`;
         await RecordRepository.create({
           individualId,
-          imagePath: permanentUris,
+          imagePath: uris,
           title: `${dateStr} 记录`,
           description: '',
           recordDate: timestamp,
         });
       }
-      loadData();
+      // 等待loadData完成后再返回
+      await loadData();
     } catch (error) {
       console.error('Failed to save images:', error);
       Alert.alert('错误', '保存图片失败');
@@ -584,14 +572,8 @@ export default function IndividualDetailScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // console.log('=== Delete Image Debug ===');
-              // console.log('Record ID:', selectedImageInfo.recordId);
-              // console.log('Image Index:', selectedImageInfo.imageIndex);
-              // console.log('Image Path:', selectedImageInfo.imagePath);
-
               const currentRecord = await RecordRepository.findById(selectedImageInfo.recordId);
               if (!currentRecord) {
-                // console.error('Record not found');
                 Alert.alert('错误', '记录不存在');
                 return;
               }
@@ -600,28 +582,29 @@ export default function IndividualDetailScreen() {
                 ? currentRecord.imagePath
                 : currentRecord.imagePath ? [currentRecord.imagePath] : [];
 
-              // console.log('Current imagePaths:', currentPaths);
-              // console.log('Removing index:', selectedImageInfo.imageIndex);
+              // 获取要删除的图片路径
+              const imagePathToDelete = currentPaths[selectedImageInfo.imageIndex];
 
               // 移除指定索引的图片
               const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
-              // console.log('Updated imagePaths:', updatedPaths);
+
+              // 如果是本地文件（documents/images/），删除实际文件
+              if (imagePathToDelete && imagePathToDelete.startsWith(getImageDirectoryPath())) {
+                await deleteImage(imagePathToDelete);
+              }
 
               if (updatedPaths.length === 0) {
                 // 如果没有图片了，删除整条记录
-                // console.log('No images left, deleting entire record');
                 await RecordRepository.delete(selectedImageInfo.recordId);
               } else {
                 // 否则更新记录，移除该图片
-                // console.log('Updating record with new imagePaths');
                 await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths });
               }
 
-              // console.log('Delete executed successfully');
               closeLongPressMenu();
               loadData();
             } catch (error) {
-              // console.error('Failed to delete image:', error);
+              console.error('Failed to delete image:', error);
               Alert.alert('错误', '删除图片失败');
             }
           },
@@ -942,20 +925,25 @@ export default function IndividualDetailScreen() {
           </View>
 
           {/* 图片滑动区域 */}
-          <ScrollView
-            ref={scrollViewRef}
+          <FlatList
+            ref={scrollViewRef as any}
+            data={viewingImagePaths}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ width: viewingImagePaths.length * screenWidth }}
+            initialScrollIndex={viewingImageIndex ?? 0}
+            getItemLayout={(data, index) => ({
+              length: screenWidth,
+              offset: screenWidth * index,
+              index,
+            })}
             onMomentumScrollEnd={(e) => {
               const pageIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
               setViewingImageIndex(pageIndex);
             }}
-            scrollEventThrottle={16}
-          >
-            {viewingImagePaths.map((path, idx) => (
-              <View key={idx} style={[styles.imageViewerItem, { width: screenWidth }]}>
+            keyExtractor={(item, index) => `viewer-${index}`}
+            renderItem={({ item: path, index }) => (
+              <View style={[styles.imageViewerItem, { width: screenWidth }]}>
                 <TouchableOpacity
                   style={styles.imageTouchable}
                   onPress={handleImageViewerTap}
@@ -968,8 +956,8 @@ export default function IndividualDetailScreen() {
                   />
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
+            )}
+          />
 
           {/* 页码指示器 */}
           {viewingImagePaths.length > 1 && (

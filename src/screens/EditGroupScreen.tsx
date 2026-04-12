@@ -152,6 +152,7 @@ export default function EditGroupScreen() {
 
     setSaving(true);
     try {
+      // 始终复制到文档目录以保证可靠性
       const permanentUri = coverImagePath
         ? await copyImageToDocumentDirectory(coverImagePath)
         : '';

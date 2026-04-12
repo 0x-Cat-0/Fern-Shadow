@@ -59,7 +59,7 @@ export default function CreateRecordScreen() {
 
     setSaving(true);
     try {
-      // 将图片复制到文档目录，获取永久 URI
+      // 始终复制到文档目录以保证可靠性
       const permanentUri = await copyImageToDocumentDirectory(imagePath);
 
       await RecordRepository.create({
