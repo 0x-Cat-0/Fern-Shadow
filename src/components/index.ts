@@ -5,3 +5,4 @@ export { SearchBar } from './SearchBar';
 export { ConfirmDialog } from './ConfirmDialog';
 export { EmptyState } from './EmptyState';
 export { ImagePickerButton } from './ImagePicker';
+export { SideDrawer } from './SideDrawer';

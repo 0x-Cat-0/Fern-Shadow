@@ -9,7 +9,6 @@ import {
   Image,
   Alert,
   useWindowDimensions,
-  Modal,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,6 +27,7 @@ type ViewMode = 'all' | 'groups';
 interface MainScreenProps {
   viewMode: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
+  onLeftBtnPress?: () => void;
 }
 
 // 瀑布流卡片组件
@@ -465,7 +465,7 @@ function GroupsView({
   );
 }
 
-export default function MainScreen({ viewMode, onViewModeChange }: MainScreenProps) {
+export default function MainScreen({ viewMode, onViewModeChange, onLeftBtnPress }: MainScreenProps) {
   const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
@@ -480,11 +480,9 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
   const [searchVisible, setSearchVisible] = useState(false);
   const [selectedIndividualId, setSelectedIndividualId] = useState<number | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-  const [showToast, setShowToast] = useState(false);
 
   const handleLeftBtnPress = () => {
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 1000);
+    onLeftBtnPress?.();
   };
 
   const loadData = useCallback(async () => {
@@ -713,25 +711,6 @@ export default function MainScreen({ viewMode, onViewModeChange }: MainScreenPro
         />
       )}
     </View>
-
-    {/* Toast提示 */}
-    <Modal
-      visible={showToast}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => setShowToast(false)}
-    >
-      <TouchableOpacity
-        style={toastStyles.overlay}
-        activeOpacity={1}
-        onPress={() => setShowToast(false)}
-      >
-        <View style={toastStyles.toast}>
-          <Text style={toastStyles.toastText}>此功能开发中</Text>
-        </View>
-      </TouchableOpacity>
-    </Modal>
     </>
   );
 }
@@ -1035,24 +1014,5 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#adadad',
     fontWeight: '300',
-  },
-});
-
-const toastStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toast: {
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-  },
-  toastText: {
-    color: '#ffffff',
-    fontSize: 15,
   },
 });

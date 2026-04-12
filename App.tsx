@@ -9,6 +9,8 @@ import { initDatabase, isDatabaseInitialized } from './src/database';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { useTheme } from './src/hooks/useTheme';
 import { lightColors } from './src/theme/colors';
+import { SideDrawer } from './src/components';
+import { useSettingsStore } from './src/store/settingsStore';
 import MainScreen from './src/screens/MainScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -30,7 +32,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 type ViewMode = 'all' | 'groups';
 type TabName = 'main' | 'community' | 'profile';
 
-function MainStack({ viewMode }: { viewMode: ViewMode }) {
+function MainStack({ viewMode, onLeftBtnPress }: { viewMode: ViewMode; onLeftBtnPress?: () => void }) {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -40,7 +42,7 @@ function MainStack({ viewMode }: { viewMode: ViewMode }) {
       }}
     >
       <Stack.Screen name="MainHome">
-        {() => <MainScreen viewMode={viewMode} />}
+        {() => <MainScreen viewMode={viewMode} onLeftBtnPress={onLeftBtnPress} />}
       </Stack.Screen>
       <Stack.Screen name="GroupDetail" component={GroupDetailScreen} />
       <Stack.Screen name="IndividualDetail" component={IndividualDetailScreen} />
@@ -73,6 +75,13 @@ function TabContent() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showStorageModal, setShowStorageModal] = useState(false);
+  const [showSideDrawer, setShowSideDrawer] = useState(false);
+  const loadSettings = useSettingsStore((state) => state.loadSettings);
+
+  // 初始化加载设置
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // 监听导航状态变化，隐藏/显示底部导航
   useEffect(() => {
@@ -87,6 +96,10 @@ function TabContent() {
 
   const handleCreate = () => {
     setShowImagePickerModal(true);
+  };
+
+  const handleLeftBtnPress = () => {
+    setShowSideDrawer(true);
   };
 
   const handleImageSourceSelect = (source: 'camera' | 'library') => {
@@ -107,7 +120,7 @@ function TabContent() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: hideBottomNav ? 0 : insets.bottom }]}>
       <View style={styles.content}>
-        {currentTab === 'main' && <MainStack viewMode={viewMode} />}
+        {currentTab === 'main' && <MainStack viewMode={viewMode} onLeftBtnPress={handleLeftBtnPress} />}
         {currentTab === 'community' && <CommunityScreen />}
         {currentTab === 'profile' && <ProfileScreen {...profileProps} />}
       </View>
@@ -236,6 +249,12 @@ function TabContent() {
       >
         <StorageManagementScreen onClose={() => setShowStorageModal(false)} />
       </Modal>
+
+      {/* 设置侧边抽屉 */}
+      <SideDrawer
+        visible={showSideDrawer}
+        onClose={() => setShowSideDrawer(false)}
+      />
     </View>
   );
 }
