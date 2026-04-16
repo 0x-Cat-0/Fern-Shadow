@@ -46,6 +46,7 @@ export type RootStackParamList = {
   TabContainer: undefined;
   MainHome: undefined;
   Community: undefined;
+  PlantRecognition: undefined;
   Profile: undefined;
   GroupList: undefined;
   GroupDetail: { groupId: number };

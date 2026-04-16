@@ -12,7 +12,7 @@ import { lightColors } from './src/theme/colors';
 import { SideDrawer } from './src/components';
 import { useSettingsStore } from './src/store/settingsStore';
 import MainScreen from './src/screens/MainScreen';
-import CommunityScreen from './src/screens/CommunityScreen';
+import PlantRecognitionScreen from './src/screens/PlantRecognitionScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GroupDetailScreen from './src/screens/GroupDetailScreen';
 import IndividualDetailScreen from './src/screens/IndividualDetailScreen';
@@ -168,7 +168,7 @@ function TabContent() {
     <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: hideBottomNav ? 0 : insets.bottom }]}>
       <View style={styles.content}>
         {currentTab === 'main' && <MainStack viewMode={viewMode} onLeftBtnPress={handleLeftBtnPress} />}
-        {currentTab === 'community' && <CommunityScreen />}
+        {currentTab === 'community' && <PlantRecognitionScreen />}
         {currentTab === 'profile' && <ProfileScreen {...profileProps} />}
       </View>
 
@@ -213,7 +213,7 @@ function TabContent() {
             onPress={() => handleTabPress('community')}
           >
             <Text style={[styles.navText, { color: currentTab === 'community' ? colors.primary : colors.textDisabled }]}>
-              社区
+              AI识别
             </Text>
           </TouchableOpacity>
 
