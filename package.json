@@ -1,5 +1,5 @@
 {
-  "name": "plant-recorder",
+  "name": "@ferns-shadow/app",
   "version": "1.1.0",
   "main": "expo/AppEntry.js",
   "scripts": {

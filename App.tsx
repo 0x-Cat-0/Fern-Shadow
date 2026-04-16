@@ -85,8 +85,56 @@ function TabContent() {
   // 监听导航状态变化，隐藏/显示底部导航
   useEffect(() => {
     const unsubscribe = navigation.addListener('state', (e: any) => {
-      const currentRouteName = e.data.state?.routes?.[e.data.state.index]?.name;
+      // 尝试从 navigation state 中获取当前路由
+      const state = navigation.getState();
+      let currentRouteName = '';
+
+      // 递归查找当前最深的路由
+      const findCurrentRoute = (s: any): string => {
+        if (!s) return '';
+        if (s.routes && s.index !== undefined) {
+          const route = s.routes[s.index];
+          if (route?.state) {
+            return findCurrentRoute(route.state);
+          }
+          return route?.name || '';
+        }
+        return '';
+      };
+
+      currentRouteName = findCurrentRoute(state);
+
+      // 如果没找到，尝试从事件数据中获取
+      if (!currentRouteName && e.data?.state) {
+        currentRouteName = findCurrentRoute(e.data.state);
+      }
+
       // 在这些页面隐藏底部导航
+      const hideNavRoutes = ['IndividualDetail', 'GroupDetail', 'CreateGroup', 'EditGroup', 'CreateIndividual', 'EditIndividual', 'CreateRecord', 'EditRecord'];
+      setHideBottomNav(hideNavRoutes.includes(currentRouteName));
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // 也监听 focus 事件来检测路由变化
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      const state = navigation.getState();
+      let currentRouteName = '';
+
+      const findCurrentRoute = (s: any): string => {
+        if (!s) return '';
+        if (s.routes && s.index !== undefined) {
+          const route = s.routes[s.index];
+          if (route?.state) {
+            return findCurrentRoute(route.state);
+          }
+          return route?.name || '';
+        }
+        return '';
+      };
+
+      currentRouteName = findCurrentRoute(state);
       const hideNavRoutes = ['IndividualDetail', 'GroupDetail', 'CreateGroup', 'EditGroup', 'CreateIndividual', 'EditIndividual', 'CreateRecord', 'EditRecord'];
       setHideBottomNav(hideNavRoutes.includes(currentRouteName));
     });

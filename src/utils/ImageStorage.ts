@@ -15,18 +15,17 @@ export function getImageDirectoryPath(): string {
 }
 
 // 确保目录存在
-function ensureDirectoryExists(): void {
+async function ensureDirectoryExists(): Promise<void> {
   const dir = getImageDirectoryPath();
-  getInfoAsync(dir).then(dirInfo => {
-    if (!dirInfo.exists) {
-      makeDirectoryAsync(dir, { intermediates: true });
-    }
-  });
+  const dirInfo = await getInfoAsync(dir);
+  if (!dirInfo.exists) {
+    await makeDirectoryAsync(dir, { intermediates: true });
+  }
 }
 
 // 从 URI 复制图片到文档目录
 export async function copyImageToDocumentDirectory(sourceUri: string): Promise<string> {
-  ensureDirectoryExists();
+  await ensureDirectoryExists();
 
   // 生成唯一文件名
   const timestamp = Date.now();
@@ -48,12 +47,7 @@ export async function copyImageToDocumentDirectory(sourceUri: string): Promise<s
 
 // 批量复制图片到文档目录
 export async function copyImagesToDocumentDirectory(sourceUris: string[]): Promise<string[]> {
-  const results: string[] = [];
-  for (const uri of sourceUris) {
-    const newUri = await copyImageToDocumentDirectory(uri);
-    results.push(newUri);
-  }
-  return results;
+  return Promise.all(sourceUris.map(uri => copyImageToDocumentDirectory(uri)));
 }
 
 // 删除图片
@@ -92,7 +86,7 @@ export async function imageExists(imagePath: string): Promise<boolean> {
 // 清理不再使用的图片
 export async function cleanupUnusedImages(usedPaths: string[]): Promise<void> {
   try {
-    ensureDirectoryExists();
+    await ensureDirectoryExists();
     const imageDir = getImageDirectoryPath();
     const files = await readDirectoryAsync(imageDir);
     const usedSet = new Set(usedPaths);

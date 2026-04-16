@@ -65,6 +65,7 @@ export default function CreateRecordScreen() {
       await RecordRepository.create({
         individualId,
         imagePath: permanentUri,
+        imageAssetIds: [],
         title: title.trim(),
         description: description.trim(),
         recordDate: recordDate.getTime(),

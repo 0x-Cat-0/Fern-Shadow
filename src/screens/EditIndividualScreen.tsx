@@ -190,27 +190,29 @@ export default function EditIndividualScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        // 按日期分组图片
-        const imagesByDate = new Map<number, string[]>();
+        // 按日期分组图片，同时收集 assetId
+        const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
 
         for (const asset of result.assets) {
           const uri = asset.uri;
+          const assetId = asset.assetId || '';
           const timestamp = getImageCreationTime(asset);
           const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
 
           if (!imagesByDate.has(dayKey)) {
-            imagesByDate.set(dayKey, []);
+            imagesByDate.set(dayKey, { uris: [], assetIds: [] });
           }
-          imagesByDate.get(dayKey)!.push(uri);
+          imagesByDate.get(dayKey)!.uris.push(uri);
+          imagesByDate.get(dayKey)!.assetIds.push(assetId);
         }
 
         // 获取当前所有记录
         const currentRecords = await RecordRepository.findByIndividualId(individualId);
 
         // 分别保存每个日期组的图片
-        for (const [dayKey, uris] of imagesByDate) {
+        for (const [dayKey, data] of imagesByDate) {
           // 始终复制到文档目录以保证可靠性
-          const permanentUris = await Promise.all(uris.map(uri => copyImageToDocumentDirectory(uri)));
+          const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
 
           // 查找目标日期是否有记录
           const targetRecord = currentRecords.find(r => isSameDay(r.recordDate, dayKey));
@@ -222,8 +224,12 @@ export default function EditIndividualScreen() {
               const existingPaths: string[] = Array.isArray(record.imagePath)
                 ? record.imagePath
                 : record.imagePath ? [record.imagePath] : [];
+              const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
+                ? record.imageAssetIds
+                : record.imageAssetIds ? [record.imageAssetIds] : [];
               const newPaths = [...existingPaths, ...permanentUris];
-              await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
+              const newAssetIds = [...existingAssetIds, ...data.assetIds];
+              await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
             }
           } else {
             // 创建新记录
@@ -232,6 +238,7 @@ export default function EditIndividualScreen() {
             await RecordRepository.create({
               individualId,
               imagePath: permanentUris,
+              imageAssetIds: data.assetIds,
               title: `${dateStr} 记录`,
               description: '',
               recordDate: dayKey,
@@ -265,6 +272,7 @@ export default function EditIndividualScreen() {
         const asset = result.assets[0];
         const timestamp = getImageCreationTime(asset);
         const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
+        const assetId = asset.assetId || '';
         // 始终复制到文档目录以保证可靠性
         const permanentUri = await copyImageToDocumentDirectory(asset.uri);
 
@@ -281,8 +289,12 @@ export default function EditIndividualScreen() {
             const existingPaths: string[] = Array.isArray(record.imagePath)
               ? record.imagePath
               : record.imagePath ? [record.imagePath] : [];
+            const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
+              ? record.imageAssetIds
+              : record.imageAssetIds ? [record.imageAssetIds] : [];
             const newPaths = [...existingPaths, permanentUri];
-            await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
+            const newAssetIds = [...existingAssetIds, assetId];
+            await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
           }
         } else {
           // 创建新记录
@@ -291,6 +303,7 @@ export default function EditIndividualScreen() {
           await RecordRepository.create({
             individualId,
             imagePath: [permanentUri],
+            imageAssetIds: [assetId],
             title: `${dateStr} 记录`,
             description: '',
             recordDate: dayKey,
@@ -324,12 +337,16 @@ export default function EditIndividualScreen() {
                 const currentPaths: string[] = Array.isArray(record.imagePath)
                   ? record.imagePath
                   : record.imagePath ? [record.imagePath] : [];
+                const currentAssetIds: string[] = Array.isArray(record.imageAssetIds)
+                  ? record.imageAssetIds
+                  : record.imageAssetIds ? [record.imageAssetIds] : [];
                 const updatedPaths = currentPaths.filter((_, idx) => idx !== index);
+                const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== index);
 
                 if (updatedPaths.length === 0) {
                   await RecordRepository.delete(recordImage.recordId);
                 } else {
-                  await RecordRepository.update(recordImage.recordId, { imagePath: updatedPaths });
+                  await RecordRepository.update(recordImage.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
                 }
               }
 

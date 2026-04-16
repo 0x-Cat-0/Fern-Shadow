@@ -9,10 +9,14 @@ export class RecordRepository {
     const imagePath = Array.isArray(dto.imagePath)
       ? JSON.stringify(dto.imagePath)
       : dto.imagePath;
+    // imageAssetIds 同理
+    const imageAssetIds = Array.isArray(dto.imageAssetIds)
+      ? JSON.stringify(dto.imageAssetIds)
+      : dto.imageAssetIds;
     const result = await db.runAsync(
-      `INSERT INTO \`records\` (individualId, imagePath, title, description, recordDate, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [dto.individualId, imagePath, dto.title, dto.description, dto.recordDate, now]
+      `INSERT INTO \`records\` (individualId, imagePath, imageAssetIds, title, description, recordDate, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [dto.individualId, imagePath, imageAssetIds, dto.title, dto.description, dto.recordDate, now]
     );
     return result.lastInsertRowId;
   }
@@ -30,6 +34,12 @@ export class RecordRepository {
       } catch {
         // 保持原样
       }
+      // 解析 imageAssetIds JSON 数组
+      try {
+        row.imageAssetIds = JSON.parse(row.imageAssetIds as unknown as string);
+      } catch {
+        // 保持原样
+      }
     }
     return row ?? null;
   }
@@ -40,10 +50,15 @@ export class RecordRepository {
       `SELECT * FROM \`records\` WHERE individualId = ? ORDER BY recordDate DESC, id DESC`,
       [individualId]
     );
-    // 解析每行的 imagePath JSON 数组
+    // 解析每行的 imagePath 和 imageAssetIds JSON 数组
     return rows.map(row => {
       try {
         row.imagePath = JSON.parse(row.imagePath as unknown as string);
+      } catch {
+        // 保持原样
+      }
+      try {
+        row.imageAssetIds = JSON.parse(row.imageAssetIds as unknown as string);
       } catch {
         // 保持原样
       }
@@ -82,6 +97,14 @@ export class RecordRepository {
         ? JSON.stringify(dto.imagePath)
         : dto.imagePath;
       values.push(imagePath);
+    }
+    if (dto.imageAssetIds !== undefined) {
+      sets.push('imageAssetIds = ?');
+      // imageAssetIds 可能是字符串或字符串数组，数组时序列化为 JSON
+      const imageAssetIds = Array.isArray(dto.imageAssetIds)
+        ? JSON.stringify(dto.imageAssetIds)
+        : dto.imageAssetIds;
+      values.push(imageAssetIds);
     }
     if (dto.title !== undefined) {
       sets.push('title = ?');

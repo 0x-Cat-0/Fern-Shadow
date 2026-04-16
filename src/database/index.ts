@@ -111,6 +111,18 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
       );
       console.log('Migration: created idx_individuals_viewCount index');
     }
+
+    // 检查 records 表是否有 imageAssetIds 列
+    const recordColumns = await database.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(\`records\`)`
+    );
+    const hasImageAssetIds = recordColumns.some(col => col.name === 'imageAssetIds');
+    if (!hasImageAssetIds) {
+      await database.runAsync(
+        `ALTER TABLE \`records\` ADD COLUMN imageAssetIds TEXT NOT NULL DEFAULT '[]'`
+      );
+      console.log('Migration: added imageAssetIds column to records table');
+    }
   } catch (error) {
     console.error('Migration failed:', error);
   }

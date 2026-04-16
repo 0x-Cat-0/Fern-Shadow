@@ -290,6 +290,7 @@ export default function CreateIndividualScreen() {
         await RecordRepository.create({
           individualId,
           imagePath: images.map(img => img.permanentUri).filter((uri): uri is string => uri !== undefined),
+          imageAssetIds: [],
           title: titleForRecord,
           description: defaultDesc,
           recordDate,

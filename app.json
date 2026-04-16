@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "蕨影",
-    "slug": "zhang-ying",
+    "slug": "fern-shadow",
     "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -30,10 +30,9 @@
       "package": "com.zhangying.app",
       "versionCode": 5,
       "permissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "runtimeVersion": {
@@ -51,6 +50,13 @@
         "expo-camera",
         {
           "cameraPermission": "蕨影需要访问您的相机来拍摄植物照片。"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "蕨影需要访问您的相册来选择植物照片。",
+          "savePhotosPermission": "蕨影需要保存照片到您的相册。"
         }
       ],
       [

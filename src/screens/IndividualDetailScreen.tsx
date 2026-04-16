@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,28 +9,32 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  Keyboard,
-  Modal,
-  ScrollView,
-  Alert,
   useWindowDimensions,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
 import { copyImageToDocumentDirectory, deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
-import type { Individual, Record as RecordType, Group, RootStackParamList } from '../types';
+import type { Individual, Group, RootStackParamList } from '../types';
+import {
+  IndividualCard,
+  RecordTimelineItem,
+  ImageViewerModal,
+  AddImageModal,
+  CustomGalleryPicker,
+  LongPressMenu,
+  DatePickerModal,
+  AddToGroupModal,
+} from '../components';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'IndividualDetail'>;
-type IndividualDetailRouteProp = RouteProp<RootStackParamList, 'IndividualDetail'>;
-
-const IMAGE_GAP = 4;
-
-interface RecordItem {
+export interface RecordItem {
   id: number;
   date: string;
   dateTimestamp: number;
@@ -38,6 +42,11 @@ interface RecordItem {
   description: string;
   imagePaths: string[];
 }
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'IndividualDetail'>;
+type IndividualDetailRouteProp = RouteProp<RootStackParamList, 'IndividualDetail'>;
+
+const IMAGE_GAP = 4;
 
 export default function IndividualDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -74,6 +83,15 @@ export default function IndividualDetailScreen() {
   const [showAddImageModal, setShowAddImageModal] = useState(false);
   const [addImageRecordId, setAddImageRecordId] = useState<number | null>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  // 是否隐藏已添加的图片（开关开启时隐藏，关闭时显示但标记）
+  const [hideAlreadyAdded, setHideAlreadyAdded] = useState(true);
+  const [existingAssetIds, setExistingAssetIds] = useState<string[]>([]);  // 该植物已添加的 assetId 列表
+
+  // 自定义相册选择器状态
+  const [showCustomGallery, setShowCustomGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<MediaLibrary.Asset[]>([]);
+  const [gallerySelectedIds, setGallerySelectedIds] = useState<string[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
 
   // 长按图片菜单状态
   const [showLongPressMenu, setShowLongPressMenu] = useState(false);
@@ -136,6 +154,23 @@ export default function IndividualDetailScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }, [individualId]);
+
+  // 获取该植物所有已添加图片的 assetId 列表
+  const loadExistingAssetIds = useCallback(async () => {
+    try {
+      const recordsData = await RecordRepository.findByIndividualId(individualId);
+      const allAssetIds: string[] = [];
+      for (const record of recordsData) {
+        const assetIds: string[] = Array.isArray(record.imageAssetIds)
+          ? record.imageAssetIds
+          : record.imageAssetIds ? [record.imageAssetIds] : [];
+        allAssetIds.push(...assetIds);
+      }
+      setExistingAssetIds(allAssetIds);
+    } catch (error) {
+      console.error('Failed to load existing assetIds:', error);
     }
   }, [individualId]);
 
@@ -232,6 +267,7 @@ export default function IndividualDetailScreen() {
   // 点击添加图片 - 显示图片选择弹窗
   const handleAddImage = (recordId: number) => {
     setAddImageRecordId(recordId);
+    loadExistingAssetIds();  // 加载已添加的 assetId 列表
     setShowAddImageModal(true);
   };
 
@@ -246,6 +282,7 @@ export default function IndividualDetailScreen() {
       const newRecordId = await RecordRepository.create({
         individualId,
         imagePath: [],
+        imageAssetIds: [],
         title: `${dateStr} 记录`,
         description: '',
         recordDate: todayTimestamp,
@@ -257,6 +294,7 @@ export default function IndividualDetailScreen() {
 
       // 显示添加图片弹窗
       setAddImageRecordId(newRecordId);
+      loadExistingAssetIds();  // 加载已添加的 assetId 列表
       setShowAddImageModal(true);
     } catch (error) {
       console.error('Failed to create today record:', error);
@@ -327,33 +365,58 @@ export default function IndividualDetailScreen() {
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      // 按日期分组图片
-      const imagesByDate = new Map<number, string[]>();
+      // 如果开启隐藏已添加，则过滤掉已存在的 assetId
+      let assetsToAdd = result.assets;
+      let skippedCount = 0;
+      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+        const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
+        for (const asset of result.assets) {
+          if (asset.assetId && existingAssetIds.includes(asset.assetId)) {
+            skippedCount++;
+          } else {
+            filteredAssets.push(asset);
+          }
+        }
+        assetsToAdd = filteredAssets;
+        if (skippedCount > 0) {
+          Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
+        }
+        if (assetsToAdd.length === 0) {
+          Alert.alert('提示', '所有选中的图片都已添加过');
+          return;
+        }
+      }
 
-      for (const asset of result.assets) {
+      // 按日期分组图片，同时收集 assetId
+      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+
+      for (const asset of assetsToAdd) {
         const uri = asset.uri;
-        const timestamp = getImageCreationTime(asset);
+        const assetId = asset.assetId || '';
+        // 尝试从 MediaLibrary 获取完整的时间信息
+        const timestamp = await getImageCreationTimeFromUri(uri);
 
         // 找到该日期所在的分组键（使用日期戳的起始-of-day）
         const dayKey = getStartOfDay(timestamp);
 
         if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, []);
+          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
         }
-        imagesByDate.get(dayKey)!.push(uri);
+        imagesByDate.get(dayKey)!.uris.push(uri);
+        imagesByDate.get(dayKey)!.assetIds.push(assetId);
       }
 
-      // 复制到文档目录
-      const permanentUrisByDate = new Map<number, string[]>();
+      // 复制到文档目录并保存
+      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
 
-      for (const [dayKey, uris] of imagesByDate) {
-        const permanentUris = await Promise.all(uris.map(uri => copyImageToDocumentDirectory(uri)));
-        permanentUrisByDate.set(dayKey, permanentUris);
+      for (const [dayKey, data] of imagesByDate) {
+        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
       }
 
       // 分别保存每个日期组的图片
-      for (const [dayKey, permanentUris] of permanentUrisByDate) {
-        await saveNewImages(permanentUris, dayKey);
+      for (const [dayKey, data] of imagesToSaveByDate) {
+        await saveNewImages(data.uris, dayKey, data.assetIds);
       }
     }
   };
@@ -367,46 +430,99 @@ export default function IndividualDetailScreen() {
 
   // 获取图片创建时间
   const getImageCreationTime = (asset: ImagePicker.ImagePickerAsset): number => {
-    let timestamp: number = Date.now();
-
     // Cast to any to access runtime properties not in type definition
     const assetAny = asset as any;
 
-    // 优先使用 creationTime
-    if (assetAny.creationTime) {
-      timestamp = assetAny.creationTime;
-    }
-    // 尝试从 EXIF 读取 DateTimeOriginal
-    else if (assetAny.exif && assetAny.exif.DateTimeOriginal) {
+    let timestamp: number | null = null;
+
+    // 1. 优先从 EXIF DateTimeOriginal 读取（最可靠的原图时间）
+    if (assetAny.exif?.DateTimeOriginal) {
       const dateStr = assetAny.exif.DateTimeOriginal as string;
-      const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
-      if (!isNaN(parsed.getTime())) {
+      // 支持多种格式: "2024:01:15 10:30:00" 或 "2024-01-15 10:30:00"
+      const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+      const parsed = new Date(normalizedStr);
+      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
         timestamp = parsed.getTime();
       }
     }
-    // 尝试从 EXIF 读取 DateTime
-    else if (assetAny.exif && assetAny.exif.DateTime) {
+
+    // 2. 尝试从 EXIF DateTime 读取
+    if (timestamp === null && assetAny.exif?.DateTime) {
       const dateStr = assetAny.exif.DateTime as string;
-      const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
-      if (!isNaN(parsed.getTime())) {
+      const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+      const parsed = new Date(normalizedStr);
+      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
         timestamp = parsed.getTime();
       }
     }
 
-    // Check if timestamp is in seconds (Unix timestamp) rather than milliseconds
-    // If the resulting date is before 2020, it's likely in seconds
-    const date = new Date(timestamp);
-    if (date.getFullYear() < 2020) {
-      timestamp = timestamp * 1000;
+    // 3. 尝试从 EXIF 其它字段读取
+    if (timestamp === null) {
+      const exif = assetAny.exif;
+      if (exif) {
+        // 尝试 PixelYDimension 和其他可能包含日期的字段
+        const possibleDateFields = ['DateTimeDigitized', 'DateTimeOriginal', 'DateTime'];
+        for (const field of possibleDateFields) {
+          if (exif[field] && timestamp === null) {
+            const dateStr = String(exif[field]);
+            const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+            const parsed = new Date(normalizedStr);
+            if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
+              timestamp = parsed.getTime();
+              break;
+            }
+          }
+        }
+      }
     }
 
-    // Final validation - should be between 2020 and 2100
-    const finalDate = new Date(timestamp);
-    if (finalDate.getFullYear() < 2020 || finalDate.getFullYear() > 2100) {
-      return Date.now();
+    // 4. 使用 creationTime（如果是有效的历史时间，且不是最近的时间）
+    if (timestamp === null && assetAny.creationTime) {
+      const ct = assetAny.creationTime;
+      // creationTime 可能是秒或毫秒
+      const ctMs = ct < 1e12 ? ct * 1000 : ct;
+      const ctDate = new Date(ctMs);
+      const now = Date.now();
+      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+      // 只有当 creationTime 是历史时间（2020-2099）且不是最近3天内的时间才使用
+      // 如果是最近的时间，可能是闲鱼等平台保存时的时间戳，不可信
+      if (ctDate.getFullYear() >= 2020 && ctDate.getFullYear() <= 2100 && (now - ctMs) > threeDaysMs) {
+        timestamp = ctMs;
+      }
+    }
+
+    // 5. 如果没有有效时间戳，返回当前时间（兜底）
+    if (timestamp === null) {
+      timestamp = Date.now();
     }
 
     return timestamp;
+  };
+
+  // 从 URI 获取图片创建时间（尝试使用 MediaLibrary 获取完整信息）
+  const getImageCreationTimeFromUri = async (uri: string): Promise<number> => {
+    try {
+      // 尝试使用 MediaLibrary 获取资产的完整信息
+      const assetInfo = await MediaLibrary.getAssetInfoAsync(uri);
+      if (assetInfo && typeof assetInfo === 'object') {
+        const info = assetInfo as any;
+        // MediaLibrary 的 assetInfo 通常包含 creationTime
+        if (info.creationTime) {
+          const ct = info.creationTime;
+          const ctMs = ct < 1e12 ? ct * 1000 : ct;
+          const ctDate = new Date(ctMs);
+          // 验证是否是合理的时间
+          if (ctDate.getFullYear() >= 2000 && ctDate.getFullYear() <= 2100) {
+            return ctMs;
+          }
+        }
+      }
+    } catch (e) {
+      // MediaLibrary 可能无法访问该 URI，忽略错误
+    }
+
+    // 如果 MediaLibrary 失败，返回当前时间（兜底）
+    return Date.now();
   };
 
   // 检查时间戳是否是同一天
@@ -418,8 +534,251 @@ export default function IndividualDetailScreen() {
            d1.getDate() === d2.getDate();
   };
 
+  // 打开自定义相册选择器
+  const openCustomGallery = async () => {
+    setShowAddImageModal(false);
+
+    try {
+      // 尝试使用 MediaLibrary 获取设备相册
+      let useMediaLibrary = false;
+
+      try {
+        // 先检查 MediaLibrary 是否可用
+        const { status: existingStatus } = await MediaLibrary.getPermissionsAsync();
+
+        if (existingStatus === 'granted') {
+          useMediaLibrary = true;
+        } else {
+          // 尝试请求权限
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          useMediaLibrary = status === 'granted';
+        }
+      } catch (e) {
+        // MediaLibrary 模块不可用或出错，使用 ImagePicker
+        useMediaLibrary = false;
+      }
+
+      if (!useMediaLibrary) {
+        // 使用 ImagePicker 作为备选
+        await pickFromImagePicker();
+        return;
+      }
+
+      // 使用 MediaLibrary 获取所有图片
+      setGalleryLoading(true);
+      setGallerySelectedIds([]);
+
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        sortBy: ['creationTime'],
+      });
+
+      setGalleryImages(assets.assets);
+      setShowCustomGallery(true);
+      setGalleryLoading(false);
+    } catch (error) {
+      console.error('Failed to load gallery images:', error);
+      // 发生错误时回退到 ImagePicker
+      await pickFromImagePicker();
+    }
+  };
+
+  // 使用 ImagePicker 选择图片（回退方案）
+  const pickFromImagePicker = async () => {
+    try {
+      const hasPermission = await requestLibraryPermission();
+      if (!hasPermission) {
+        Alert.alert('提示', '需要相册权限才能选择图片');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 1,
+        exif: true,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        // 直接处理图片
+        await processPickerAssets(result.assets);
+      }
+    } catch (error) {
+      console.error('Failed to pick images:', error);
+      Alert.alert('错误', '选择图片失败');
+    }
+  };
+
+  // 处理 ImagePicker 返回的图片（回退方案）
+  const processPickerAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    try {
+      let assetsToAdd = assets;
+
+      // 如果是隐藏模式，过滤掉已添加的图片
+      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+        const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
+        let skippedCount = 0;
+        for (const asset of assets) {
+          if (asset.assetId && existingAssetIds.includes(asset.assetId)) {
+            skippedCount++;
+          } else {
+            filteredAssets.push(asset);
+          }
+        }
+        assetsToAdd = filteredAssets;
+        if (skippedCount > 0) {
+          Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
+        }
+        if (assetsToAdd.length === 0) {
+          Alert.alert('提示', '所有选中的图片都已添加过');
+          return;
+        }
+      }
+
+      // 按日期分组图片，同时收集 assetId
+      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+
+      for (const asset of assetsToAdd) {
+        const uri = asset.uri;
+        const assetId = asset.assetId || '';
+        const timestamp = getImageCreationTime(asset);
+        const dayKey = getStartOfDay(timestamp);
+
+        if (!imagesByDate.has(dayKey)) {
+          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+        }
+        imagesByDate.get(dayKey)!.uris.push(uri);
+        imagesByDate.get(dayKey)!.assetIds.push(assetId);
+      }
+
+      // 复制到文档目录并保存
+      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+
+      for (const [dayKey, data] of imagesByDate) {
+        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
+      }
+
+      // 分别保存每个日期组的图片
+      for (const [dayKey, data] of imagesToSaveByDate) {
+        await saveNewImages(data.uris, dayKey, data.assetIds);
+      }
+    } catch (error) {
+      console.error('Failed to process picker assets:', error);
+      Alert.alert('错误', '保存图片失败');
+    }
+  };
+
+  // 切换图片选择状态
+  const toggleGallerySelection = (asset: MediaLibrary.Asset) => {
+    const assetId = asset.id;
+    if (!assetId) return;
+
+    setGallerySelectedIds(prev => {
+      if (prev.includes(assetId)) {
+        return prev.filter(id => id !== assetId);
+      } else {
+        return [...prev, assetId];
+      }
+    });
+  };
+
+  // 确认相册选择
+  const confirmGallerySelection = async () => {
+    if (gallerySelectedIds.length === 0) {
+      Alert.alert('提示', '请先选择图片');
+      return;
+    }
+
+    try {
+      // 获取选中的图片资源
+      let selectedAssets = galleryImages.filter(img => img.id && gallerySelectedIds.includes(img.id));
+
+      // 如果是隐藏模式，过滤掉已添加的图片
+      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+        const beforeCount = selectedAssets.length;
+        selectedAssets = selectedAssets.filter(img => {
+          if (img.id && existingAssetIds.includes(img.id)) {
+            return false;
+          }
+          return true;
+        });
+        const skippedCount = beforeCount - selectedAssets.length;
+        if (skippedCount > 0) {
+          Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
+        }
+        if (selectedAssets.length === 0) {
+          Alert.alert('提示', '没有可添加的图片');
+          return;
+        }
+      }
+
+      if (selectedAssets.length === 0) {
+        Alert.alert('提示', '未找到有效的图片');
+        setShowCustomGallery(false);
+        return;
+      }
+
+      // 获取每个图片的永久 URI
+      const assetsWithUri: { uri: string; assetId: string; timestamp: number }[] = [];
+      for (const asset of selectedAssets) {
+        try {
+          const info = await MediaLibrary.getAssetInfoAsync(asset);
+          const permanentUri = typeof info === 'string' ? info : info.uri;
+          if (permanentUri) {
+            assetsWithUri.push({
+              uri: permanentUri,
+              assetId: asset.id || '',
+              timestamp: asset.creationTime || Date.now(),
+            });
+          }
+        } catch (error) {
+          console.error('Failed to get asset info:', error);
+        }
+      }
+
+      // 按日期分组
+      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      for (const img of assetsWithUri) {
+        const dayKey = getStartOfDay(img.timestamp);
+        if (!imagesByDate.has(dayKey)) {
+          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+        }
+        imagesByDate.get(dayKey)!.uris.push(img.uri);
+        imagesByDate.get(dayKey)!.assetIds.push(img.assetId);
+      }
+
+      // 复制到文档目录并保存
+      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      for (const [dayKey, data] of imagesByDate) {
+        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
+      }
+
+      // 分别保存每个日期组的图片
+      for (const [dayKey, data] of imagesToSaveByDate) {
+        await saveNewImages(data.uris, dayKey, data.assetIds);
+      }
+
+      setShowCustomGallery(false);
+      setGallerySelectedIds([]);
+      setGalleryImages([]);
+    } catch (error) {
+      console.error('Failed to save gallery images:', error);
+      Alert.alert('错误', '保存图片失败');
+    }
+  };
+
+  // 关闭自定义相册选择器
+  const closeCustomGallery = () => {
+    setShowCustomGallery(false);
+    setGallerySelectedIds([]);
+    setGalleryImages([]);
+  };
+
   // 保存新图片到记录
-  const saveNewImages = async (uris: string[], timestamp: number) => {
+  const saveNewImages = async (uris: string[], timestamp: number, assetIds: string[] = []) => {
     if (uris.length === 0) return;
 
     try {
@@ -432,8 +791,12 @@ export default function IndividualDetailScreen() {
         const existingPaths: string[] = Array.isArray(existingRecord.imagePath)
           ? existingRecord.imagePath
           : existingRecord.imagePath ? [existingRecord.imagePath] : [];
+        const existingAssetIdList: string[] = Array.isArray(existingRecord.imageAssetIds)
+          ? existingRecord.imageAssetIds
+          : existingRecord.imageAssetIds ? [existingRecord.imageAssetIds] : [];
         const newPaths = [...existingPaths, ...uris];
-        await RecordRepository.update(existingRecord.id, { imagePath: newPaths });
+        const newAssetIds = [...existingAssetIdList, ...assetIds];
+        await RecordRepository.update(existingRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
       } else {
         // 没有相同日期的记录：创建新记录
         const imageDate = new Date(timestamp);
@@ -441,6 +804,7 @@ export default function IndividualDetailScreen() {
         await RecordRepository.create({
           individualId,
           imagePath: uris,
+          imageAssetIds: assetIds,
           title: `${dateStr} 记录`,
           description: '',
           recordDate: timestamp,
@@ -507,21 +871,30 @@ export default function IndividualDetailScreen() {
         return;
       }
 
-      // 从当前记录中移除该图片
+      // 获取当前记录
       const currentRecord = await RecordRepository.findById(selectedImageInfo.recordId);
-      if (currentRecord) {
-        const currentPaths: string[] = Array.isArray(currentRecord.imagePath)
-          ? currentRecord.imagePath
-          : currentRecord.imagePath ? [currentRecord.imagePath] : [];
-        const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
+      if (!currentRecord) {
+        Alert.alert('错误', '记录不存在');
+        return;
+      }
 
-        if (updatedPaths.length === 0) {
-          // 如果没有图片了，删除整条记录
-          await RecordRepository.delete(selectedImageInfo.recordId);
-        } else {
-          // 否则更新记录
-          await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths });
-        }
+      const currentPaths: string[] = Array.isArray(currentRecord.imagePath)
+        ? currentRecord.imagePath
+        : currentRecord.imagePath ? [currentRecord.imagePath] : [];
+      const currentAssetIds: string[] = Array.isArray(currentRecord.imageAssetIds)
+        ? currentRecord.imageAssetIds
+        : currentRecord.imageAssetIds ? [currentRecord.imageAssetIds] : [];
+      const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
+      const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
+      // 获取要移动的图片对应的 assetId
+      const movingAssetId = currentAssetIds[selectedImageInfo.imageIndex] || '';
+
+      if (updatedPaths.length === 0) {
+        // 如果没有图片了，删除整条记录
+        await RecordRepository.delete(selectedImageInfo.recordId);
+      } else {
+        // 否则更新记录
+        await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
       }
 
       // 查找目标日期是否有记录
@@ -534,8 +907,12 @@ export default function IndividualDetailScreen() {
           const existingPaths: string[] = Array.isArray(record.imagePath)
             ? record.imagePath
             : record.imagePath ? [record.imagePath] : [];
+          const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
+            ? record.imageAssetIds
+            : record.imageAssetIds ? [record.imageAssetIds] : [];
           const newPaths = [...existingPaths, selectedImageInfo.imagePath];
-          await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
+          const newAssetIds = [...existingAssetIds, movingAssetId];
+          await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
         }
       } else {
         // 创建新记录
@@ -543,6 +920,7 @@ export default function IndividualDetailScreen() {
         await RecordRepository.create({
           individualId,
           imagePath: [selectedImageInfo.imagePath],
+          imageAssetIds: [movingAssetId],
           title: `${dateStr} 记录`,
           description: '',
           recordDate: newTimestamp,
@@ -581,12 +959,16 @@ export default function IndividualDetailScreen() {
               const currentPaths: string[] = Array.isArray(currentRecord.imagePath)
                 ? currentRecord.imagePath
                 : currentRecord.imagePath ? [currentRecord.imagePath] : [];
+              const currentAssetIds: string[] = Array.isArray(currentRecord.imageAssetIds)
+                ? currentRecord.imageAssetIds
+                : currentRecord.imageAssetIds ? [currentRecord.imageAssetIds] : [];
 
               // 获取要删除的图片路径
               const imagePathToDelete = currentPaths[selectedImageInfo.imageIndex];
 
               // 移除指定索引的图片
               const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
+              const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
 
               // 如果是本地文件（documents/images/），删除实际文件
               if (imagePathToDelete && imagePathToDelete.startsWith(getImageDirectoryPath())) {
@@ -597,8 +979,8 @@ export default function IndividualDetailScreen() {
                 // 如果没有图片了，删除整条记录
                 await RecordRepository.delete(selectedImageInfo.recordId);
               } else {
-                // 否则更新记录，移除该图片
-                await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths });
+                // 否则更新记录，移除该图片和对应的 assetId
+                await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
               }
 
               closeLongPressMenu();
@@ -673,143 +1055,42 @@ export default function IndividualDetailScreen() {
   };
 
   const renderRecordItem = ({ item, index }: { item: RecordItem; index: number }) => {
-    const isFirst = index === 0;
-    const isEditingTitle = editingTitleId === item.id;
-    const isEditingDesc = editingDescId === item.id;
-
     return (
-      <View style={styles.recordItem}>
-        {/* 日期 - 左侧固定宽度 */}
-        <View style={styles.dateSection}>
-          <View style={styles.dateTextWrapper}>
-            <Text style={[styles.dateText, { color: '#333333' }]}>{item.date}</Text>
-            <Text style={[styles.yearText, { color: '#cccccc' }]}>{formatYear(item.dateTimestamp)}</Text>
-          </View>
-        </View>
-
-        {/* 节点区域 */}
-        <View style={styles.nodeSection}>
-          {/* 如果有虚拟今天记录，第一个实际记录需要显示连接线 */}
-          {!isFirst && <View style={styles.nodeLineTop} />}
-          <View style={[styles.nodeDot, { backgroundColor: '#ffffff', borderColor: '#e0e0e0' }]} />
-          <View style={styles.nodeLineBottom} />
-        </View>
-
-        {/* 内容区域 */}
-        <View style={styles.contentSection}>
-          {/* 标题 */}
-          {isEditingTitle ? (
-            <TextInput
-              ref={titleInputRef}
-              style={[styles.recordTitle, styles.inlineInput, { color: '#333333', width: measureTextWidth(editTitle) }]}
-              value={editTitle}
-              onChangeText={setEditTitle}
-              onBlur={() => handleSaveTitle(item.id)}
-              onSubmitEditing={() => handleSaveTitle(item.id)}
-              autoFocus
-            />
-          ) : (
-            <TouchableOpacity onPress={() => handleTitlePress(item)} activeOpacity={0.7} style={styles.inlineTouchable}>
-              <Text style={[styles.recordTitle, { color: '#333333' }]}>{item.title}</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* 描述 */}
-          {isEditingDesc ? (
-            <TextInput
-              ref={descInputRef}
-              style={[styles.recordDesc, styles.inlineInput, { color: '#666666', width: measureTextWidth(editDescription || '点击添加描述...') }]}
-              value={editDescription}
-              onChangeText={setEditDescription}
-              onBlur={() => handleSaveDescription(item.id)}
-              multiline
-              placeholder="点击添加描述..."
-              placeholderTextColor="#cccccc"
-            />
-          ) : (
-            <TouchableOpacity onPress={() => handleDescPress(item)} activeOpacity={0.7} style={styles.inlineTouchable}>
-              <Text style={[styles.recordDesc, { color: item.description ? '#666666' : '#cccccc' }]}>
-                {item.description || '点击添加描述...'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* 图片 */}
-          <View style={styles.imagesContainer}>
-            {item.imagePaths.length > 0 ? (
-              <>
-                {item.imagePaths.map((path, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    onPress={() => {
-                      const allPaths = records.map(r => ({ recordId: r.id, paths: r.imagePaths }));
-                      handleImagePress(allPaths, path);
-                    }}
-                    onLongPress={(e) => handleImageLongPress(e, item.id, item.dateTimestamp, path, idx)}
-                    delayLongPress={500}
-                    activeOpacity={0.8}
-                  >
-                    <Image
-                      source={{ uri: path }}
-                      style={[styles.recordImage, { width: imageSize, height: imageSize }]}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                ))}
-                {/* 今天的记录显示添加按钮 */}
-                {isToday(item.dateTimestamp) && (
-                  <TouchableOpacity
-                    style={[styles.recordImage, styles.addImageBtn, { width: imageSize, height: imageSize }]}
-                    onPress={() => handleAddImage(item.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.addImageIcon}>+</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            ) : isToday(item.dateTimestamp) ? (
-              /* 今天无图片时显示占位符 */
-              <TouchableOpacity
-                style={[styles.recordImage, styles.addImageBtn, { width: imageSize, height: imageSize }]}
-                onPress={() => handleAddImage(item.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.addImageIcon}>+</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
-      </View>
+      <RecordTimelineItem
+        item={item}
+        index={index}
+        isFirst={index === 0}
+        isToday={isToday}
+        imageSize={imageSize}
+        editingTitleId={editingTitleId}
+        editingDescId={editingDescId}
+        editTitle={editTitle}
+        editDescription={editDescription}
+        onTitlePress={handleTitlePress}
+        onDescPress={handleDescPress}
+        onSaveTitle={handleSaveTitle}
+        onSaveDescription={handleSaveDescription}
+        onImagePress={handleImagePress}
+        onImageLongPress={handleImageLongPress}
+        onAddImage={handleAddImage}
+        records={records}
+        titleInputRef={titleInputRef as any}
+        descInputRef={descInputRef as any}
+        setEditTitle={setEditTitle}
+        setEditDescription={setEditDescription}
+      />
     );
   };
 
   const renderHeader = () => (
     <>
-      <View style={styles.individualCard}>
-        <Image
-          source={individual?.coverImagePath ? { uri: individual.coverImagePath } : require('../../assets/icons/fern.png')}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
-        <View style={styles.infoContent}>
-          <View style={styles.infoTop}>
-            <Text style={[styles.individualTitle, { color: '#333333' }]}>{individual?.title}</Text>
-            {individual?.description ? (
-              <Text style={[styles.individualDesc, { color: '#666666' }]} numberOfLines={2}>
-                {individual.description}
-              </Text>
-            ) : null}
-          </View>
-          <View style={styles.infoBottom}>
-            <Text style={[styles.individualStats, { color: '#999999' }]}>
-              已经陪伴{getDaysSinceCreation()}天 · 上次记录{getDaysSinceLastRecord()}天前
-            </Text>
-            <Text style={[styles.individualStats, { color: '#999999' }]}>
-              {records.length} 条记录 · 共{records.reduce((sum, r) => sum + r.imagePaths.length, 0)}张图片 · <Image source={require('../../assets/icons/view.png')} style={{width: 12, height: 12}} /> {individual?.viewCount || 0}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <IndividualCard
+        individual={individual}
+        daysSinceCreation={getDaysSinceCreation()}
+        daysSinceLastRecord={getDaysSinceLastRecord()}
+        recordCount={records.length}
+        totalImages={records.reduce((sum, r) => sum + r.imagePaths.length, 0)}
+      />
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: '#333333' }]}>时间线</Text>
@@ -906,287 +1187,71 @@ export default function IndividualDetailScreen() {
       />
 
       {/* 图片查看器 */}
-      <Modal
+      <ImageViewerModal
         visible={viewingImageIndex !== null}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setViewingImageIndex(null)}
-      >
-        <View style={styles.imageViewerContainer}>
-          {/* 顶部关闭按钮 */}
-          <View style={styles.imageViewerHeader}>
-            <TouchableOpacity
-              style={styles.imageViewerClose}
-              onPress={() => setViewingImageIndex(null)}
-            >
-              <Text style={styles.imageViewerCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 图片滑动区域 */}
-          <FlatList
-            ref={scrollViewRef as any}
-            data={viewingImagePaths}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            initialScrollIndex={viewingImageIndex ?? 0}
-            getItemLayout={(data, index) => ({
-              length: screenWidth,
-              offset: screenWidth * index,
-              index,
-            })}
-            onMomentumScrollEnd={(e) => {
-              const pageIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-              setViewingImageIndex(pageIndex);
-            }}
-            keyExtractor={(item, index) => `viewer-${index}`}
-            renderItem={({ item: path, index }) => (
-              <View style={[styles.imageViewerItem, { width: screenWidth }]}>
-                <TouchableOpacity
-                  style={styles.imageTouchable}
-                  onPress={handleImageViewerTap}
-                  activeOpacity={1}
-                >
-                  <Image
-                    source={{ uri: path }}
-                    style={styles.imageViewerImage}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-
-          {/* 页码指示器 */}
-          {viewingImagePaths.length > 1 && (
-            <View style={styles.imageViewerIndicator}>
-              <Text style={styles.imageViewerIndicatorText}>
-                {(viewingImageIndex || 0) + 1} / {viewingImagePaths.length}
-              </Text>
-            </View>
-          )}
-        </View>
-      </Modal>
+        imagePaths={viewingImagePaths}
+        currentIndex={viewingImageIndex}
+        onClose={() => setViewingImageIndex(null)}
+        scrollViewRef={scrollViewRef as any}
+      />
 
       {/* 添加图片弹窗 */}
-      <Modal
+      <AddImageModal
         visible={showAddImageModal}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setShowAddImageModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.addImageModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAddImageModal(false)}
-        >
-          <View style={[styles.addImageModalContent, { backgroundColor: colors.surface }]}>
-            <TouchableOpacity style={styles.addImageModalBtn} onPress={takePhoto}>
-              <Text style={[styles.addImageModalBtnText, { color: '#333333' }]}>拍照</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addImageModalBtn} onPress={pickFromLibrary}>
-              <Text style={[styles.addImageModalBtnText, { color: '#333333' }]}>从相册选择</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.addImageModalBtn, styles.addImageModalBtnLast]} onPress={() => setShowAddImageModal(false)}>
-              <Text style={[styles.addImageModalBtnText, { color: colors.textDisabled }]}>取消</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        hideAlreadyAdded={hideAlreadyAdded}
+        onHideToggle={setHideAlreadyAdded}
+        onClose={() => setShowAddImageModal(false)}
+        onTakePhoto={takePhoto}
+        onPickFromGallery={openCustomGallery}
+      />
+
+      {/* 自定义相册选择器 */}
+      <CustomGalleryPicker
+        visible={showCustomGallery}
+        images={galleryImages}
+        selectedIds={gallerySelectedIds}
+        existingAssetIds={existingAssetIds}
+        hideAlreadyAdded={hideAlreadyAdded}
+        loading={galleryLoading}
+        onClose={closeCustomGallery}
+        onConfirm={confirmGallerySelection}
+        onToggleSelection={toggleGallerySelection}
+        onHideToggle={setHideAlreadyAdded}
+      />
 
       {/* 长按图片菜单 */}
-      <Modal
+      <LongPressMenu
         visible={showLongPressMenu}
-        transparent
-        animationType="fade"
-        onRequestClose={closeLongPressMenu}
-      >
-        <TouchableOpacity
-          style={styles.longPressOverlay}
-          activeOpacity={1}
-          onPress={closeLongPressMenu}
-        >
-          <View
-            style={[
-              styles.longPressMenu,
-              {
-                top: Math.min(longPressPosition.y, screenHeight - 150),
-                left: Math.min(longPressPosition.x, screenWidth - 120),
-              },
-            ]}
-          >
-            <TouchableOpacity
-              style={[styles.longPressMenuItem, styles.longPressMenuItemTop]}
-              onPress={handleModifyDate}
-            >
-              <Text style={styles.longPressMenuItemText}>修改日期</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.longPressMenuItem, styles.longPressMenuItemBottom]}
-              onPress={handleDeleteRecord}
-            >
-              <Text style={[styles.longPressMenuItemText, { color: '#FF4040' }]}>删除该记录</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        position={longPressPosition}
+        onClose={closeLongPressMenu}
+        onModifyDate={handleModifyDate}
+        onDeleteRecord={handleDeleteRecord}
+      />
 
       {/* 日期选择器弹窗 */}
-      <Modal
+      <DatePickerModal
         visible={showDatePickerModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDatePickerModal(false)}
-      >
-        <View style={styles.datePickerOverlay}>
-          <View style={[styles.datePickerContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.datePickerHeader}>
-              <TouchableOpacity onPress={() => setShowDatePickerModal(false)}>
-                <Text style={[styles.datePickerCancel, { color: colors.textDisabled }]}>取消</Text>
-              </TouchableOpacity>
-              <Text style={[styles.datePickerTitle, { color: colors.textPrimary }]}>选择日期</Text>
-              <TouchableOpacity onPress={handleDateConfirm}>
-                <Text style={[styles.datePickerConfirm, { color: colors.primary }]}>确认</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.datePickerYears}>
-              <TouchableOpacity
-                style={styles.yearArrow}
-                onPress={() => {
-                  const newDate = new Date(datePickerValue);
-                  newDate.setFullYear(newDate.getFullYear() - 1);
-                  setDatePickerValue(newDate);
-                }}
-              >
-                <Text style={styles.yearArrowText}>‹</Text>
-              </TouchableOpacity>
-              <Text style={[styles.datePickerYear, { color: colors.textPrimary }]}>
-                {datePickerValue.getFullYear()}年
-              </Text>
-              <TouchableOpacity
-                style={styles.yearArrow}
-                onPress={() => {
-                  const newDate = new Date(datePickerValue);
-                  newDate.setFullYear(newDate.getFullYear() + 1);
-                  setDatePickerValue(newDate);
-                }}
-              >
-                <Text style={styles.yearArrowText}>›</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.datePickerMonths}>
-              {Array.from({ length: 12 }, (_, i) => {
-                const month = i + 1;
-                const isSelected = datePickerValue.getMonth() === i;
-                return (
-                  <TouchableOpacity
-                    key={month}
-                    style={[
-                      styles.monthItem,
-                      isSelected && { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => {
-                      const newDate = new Date(datePickerValue);
-                      newDate.setMonth(i);
-                      setDatePickerValue(newDate);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.monthText,
-                        { color: isSelected ? '#fff' : colors.textPrimary },
-                      ]}
-                    >
-                      {month}月
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={styles.datePickerDays}>
-              {Array.from({ length: 31 }, (_, i) => {
-                const day = i + 1;
-                const isSelected = datePickerValue.getDate() === day;
-                return (
-                  <TouchableOpacity
-                    key={day}
-                    style={[
-                      styles.dayItem,
-                      isSelected && { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => {
-                      const newDate = new Date(datePickerValue);
-                      newDate.setDate(day);
-                      setDatePickerValue(newDate);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.dayText,
-                        { color: isSelected ? '#fff' : colors.textPrimary },
-                      ]}
-                    >
-                      {day}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      </Modal>
+        value={datePickerValue}
+        onValueChange={setDatePickerValue}
+        onClose={() => setShowDatePickerModal(false)}
+        onConfirm={handleDateConfirm}
+      />
 
       {/* 添加到分组弹窗 */}
-      <Modal
+      <AddToGroupModal
         visible={showAddToGroupModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddToGroupModal(false)}
-      >
-        <View style={styles.datePickerOverlay}>
-          <View style={[styles.datePickerContent, { backgroundColor: colors.surface }]}>
-            <View style={styles.datePickerHeader}>
-              <TouchableOpacity onPress={() => setShowAddToGroupModal(false)}>
-                <Text style={[styles.datePickerCancel, { color: colors.textDisabled }]}>取消</Text>
-              </TouchableOpacity>
-              <Text style={[styles.datePickerTitle, { color: colors.textPrimary }]}>添加到分组</Text>
-              <TouchableOpacity onPress={handleConfirmAddToGroup}>
-                <Text style={[styles.datePickerConfirm, { color: colors.primary }]}>完成</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.groupListContainer}>
-              {availableGroups.length === 0 ? (
-                <Text style={[styles.noGroupsText, { color: colors.textDisabled }]}>暂无分组</Text>
-              ) : (
-                availableGroups.map(group => (
-                  <TouchableOpacity
-                    key={group.id}
-                    style={styles.groupItem}
-                    onPress={() => {
-                      setSelectedGroupIds(prev =>
-                        prev.includes(group.id)
-                          ? prev.filter(id => id !== group.id)
-                          : [...prev, group.id]
-                      );
-                    }}
-                  >
-                    <Text style={[styles.groupItemText, { color: colors.textPrimary }]}>{group.title}</Text>
-                    <View style={[
-                      styles.groupCheckbox,
-                      selectedGroupIds.includes(group.id) && { backgroundColor: colors.primary, borderColor: colors.primary }
-                    ]}>
-                      {selectedGroupIds.includes(group.id) && <Text style={styles.groupCheckboxText}>✓</Text>}
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        groups={availableGroups}
+        selectedGroupIds={selectedGroupIds}
+        onClose={() => setShowAddToGroupModal(false)}
+        onConfirm={handleConfirmAddToGroup}
+        onToggleGroup={(groupId) => {
+          setSelectedGroupIds(prev =>
+            prev.includes(groupId)
+              ? prev.filter(id => id !== groupId)
+              : [...prev, groupId]
+          );
+        }}
+      />
     </View>
   );
 }
@@ -1457,6 +1522,54 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     shadowRadius: 0,
   },
+  addImageHideToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  addImageHideToggleText: {
+    fontSize: 15,
+  },
+  addImageModalToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  addImageModalToggleText: {
+    fontSize: 15,
+  },
+  addImageModeSelector: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  addImageModeButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  addImageModeLabel: {
+    fontSize: 14,
+  },
+  addImageModeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  addImageModeBtnText: {
+    fontSize: 13,
+  },
+  addImageModalDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+  },
   addImageModalTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -1475,6 +1588,109 @@ const styles = StyleSheet.create({
   },
   addImageModalBtnText: {
     fontSize: 16,
+  },
+  // 自定义相册选择器
+  customGalleryContainer: {
+    flex: 1,
+  },
+  customGalleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  customGalleryCancelText: {
+    fontSize: 16,
+  },
+  customGalleryTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  customGalleryConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  customGalleryModeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  customGalleryModeText: {
+    fontSize: 14,
+  },
+  customGalleryGrid: {
+    padding: 2,
+  },
+  customGalleryItem: {
+    width: '25%',
+    aspectRatio: 1,
+    padding: 2,
+  },
+  customGalleryItemDisabled: {
+    opacity: 0.3,
+  },
+  customGalleryImage: {
+    flex: 1,
+    borderRadius: 4,
+  },
+  customGalleryImageDisabled: {
+    opacity: 0.5,
+  },
+  customGalleryMarkedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 4,
+    margin: 2,
+  },
+  customGalleryMarkedIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customGalleryMarkedCheck: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  customGallerySelectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderWidth: 3,
+    borderRadius: 4,
+    margin: 2,
+  },
+  customGallerySelectedIcon: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customGallerySelectedCheck: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  customGalleryLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  customGalleryEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // 长按菜单
   longPressOverlay: {

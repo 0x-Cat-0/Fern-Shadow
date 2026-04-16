@@ -67,7 +67,8 @@ function WaterfallCard({
     if (isSelected) {
       onDeselect?.();
     } else {
-      navigation.navigate('IndividualDetail', { individualId: item.id });
+      // 使用 getParent() 获取 RootStack 的导航并跳转，这样 TabContainer 会被替换，底部导航会隐藏
+      (navigation as any).getParent()?.navigate('IndividualDetail', { individualId: item.id });
     }
   };
 
@@ -115,7 +116,6 @@ function WaterfallCard({
             <TouchableOpacity
               style={styles.cardActionBtn}
               onPress={() => {
-                console.log('WaterfallCard Edit button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
                 onEdit?.();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -125,7 +125,6 @@ function WaterfallCard({
             <TouchableOpacity
               style={styles.cardActionBtn}
               onPress={() => {
-                console.log('WaterfallCard Delete button PRESSED, item.id:', item.id, 'isSelected:', isSelected);
                 onDelete?.();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -274,19 +273,15 @@ function GroupsView({
   const itemHeight = itemWidth + 40; // 图片 + 内容高度
 
   const handleCardPress = (item: Group) => {
-    console.log('=== CARD PRESSED ===', item.id, 'selectedId:', selectedId);
     // 如果该项已选中，取消选择
     if (selectedId === item.id) {
-      console.log('=== CARD PRESSED - DESELECT ===');
       onSelectItem(null);
       return;
     }
-    console.log('=== CARD PRESSED - NAVIGATE ===');
     navigation.navigate('GroupDetail', { groupId: item.id });
   };
 
   const handleCardLongPress = (item: Group) => {
-    console.log('=== CARD LONG PRESS ===', item.id);
     onSelectItem(item.id);
   };
 
