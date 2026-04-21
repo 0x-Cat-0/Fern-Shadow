@@ -693,6 +693,17 @@ export default function IndividualDetailScreen() {
     });
   };
 
+  // 长按选择（开始多选模式并选中当前项）
+  const handleLongPressSelection = (asset: MediaLibrary.Asset) => {
+    const assetId = asset.id;
+    if (!assetId) return;
+
+    // 选中当前项
+    if (!gallerySelectedIds.includes(assetId)) {
+      setGallerySelectedIds(prev => [...prev, assetId]);
+    }
+  };
+
   // 确认相册选择
   const confirmGallerySelection = async () => {
     if (gallerySelectedIds.length === 0) {
@@ -1228,6 +1239,7 @@ export default function IndividualDetailScreen() {
         onConfirm={confirmGallerySelection}
         onToggleSelection={toggleGallerySelection}
         onHideToggle={setHideAlreadyAdded}
+        onLongPressSelection={handleLongPressSelection}
       />
 
       {/* 长按图片菜单 */}

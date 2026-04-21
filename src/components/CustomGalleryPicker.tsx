@@ -1,15 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   Image,
   TouchableOpacity,
-  FlatList,
+  SectionList,
   Modal,
   StyleSheet,
   ActivityIndicator,
   Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { useTheme } from '../hooks/useTheme';
 
@@ -24,6 +25,56 @@ interface CustomGalleryPickerProps {
   onConfirm: () => void;
   onToggleSelection: (asset: MediaLibrary.Asset) => void;
   onHideToggle: (value: boolean) => void;
+  onLongPressSelection?: (asset: MediaLibrary.Asset) => void;  // 长按选择回调
+}
+
+// 按日期分组的数据结构
+interface GallerySection {
+  title: string;
+  data: MediaLibrary.Asset[];
+}
+
+// 将图片按日期分组
+function groupImagesByDate(images: MediaLibrary.Asset[], existingAssetIds: string[] = [], hideAlreadyAdded: boolean = false): GallerySection[] {
+  // 如果开启隐藏，则过滤掉已添加的图片
+  const filteredImages = hideAlreadyAdded && existingAssetIds.length > 0
+    ? images.filter(img => !(img.id && existingAssetIds.includes(img.id)))
+    : images;
+
+  const groups = new Map<string, MediaLibrary.Asset[]>();
+
+  for (const image of filteredImages) {
+    const date = new Date(image.creationTime || Date.now());
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, []);
+    }
+    groups.get(dateKey)!.push(image);
+  }
+
+  // 转换为数组并按日期降序排列（最新的在前）
+  const sections: GallerySection[] = [];
+  groups.forEach((data, title) => {
+    sections.push({ title, data });
+  });
+  sections.sort((a, b) => b.title.localeCompare(a.title));
+
+  return sections;
+}
+
+// 格式化日期显示
+function formatDateTitle(dateStr: string): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+  if (dateStr === todayStr) return '今天';
+  if (dateStr === yesterdayStr) return '昨天';
+  return dateStr;
 }
 
 export function CustomGalleryPicker({
@@ -37,8 +88,20 @@ export function CustomGalleryPicker({
   onConfirm,
   onToggleSelection,
   onHideToggle,
+  onLongPressSelection,
 }: CustomGalleryPickerProps) {
   const colors = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // 长按选择模式
+  const handleLongPress = (asset: MediaLibrary.Asset) => {
+    if (onLongPressSelection) {
+      onLongPressSelection(asset);
+    } else {
+      // 默认行为：直接切换选择状态
+      onToggleSelection(asset);
+    }
+  };
 
   return (
     <Modal
@@ -46,16 +109,16 @@ export function CustomGalleryPicker({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={[styles.customGalleryContainer, { backgroundColor: colors.background }]}>
+      <View style={[styles.customGalleryContainer, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* 顶部栏 */}
         <View style={[styles.customGalleryHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
             <Text style={[styles.customGalleryCancelText, { color: colors.textSecondary }]}>取消</Text>
           </TouchableOpacity>
           <Text style={[styles.customGalleryTitle, { color: colors.textPrimary }]}>
             选择图片 {selectedIds.length > 0 && `(${selectedIds.length})`}
           </Text>
-          <TouchableOpacity onPress={onConfirm}>
+          <TouchableOpacity onPress={onConfirm} style={styles.headerBtn}>
             <Text style={[styles.customGalleryConfirmText, { color: selectedIds.length > 0 ? colors.primary : colors.textDisabled }]}>
               完成
             </Text>
@@ -81,11 +144,9 @@ export function CustomGalleryPicker({
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : (
-          <FlatList
-            data={images}
+          <SectionList
+            sections={useMemo(() => groupImagesByDate(images, existingAssetIds, hideAlreadyAdded), [images, existingAssetIds, hideAlreadyAdded])}
             keyExtractor={(item) => item.id || String(item.uri)}
-            numColumns={4}
-            contentContainerStyle={styles.customGalleryGrid}
             renderItem={({ item }) => {
               const isSelected = item.id ? selectedIds.includes(item.id) : false;
               const isAlreadyAdded = item.id ? existingAssetIds.includes(item.id) : false;
@@ -95,6 +156,8 @@ export function CustomGalleryPicker({
                 <TouchableOpacity
                   style={[styles.customGalleryItem, isDisabled && styles.customGalleryItemDisabled]}
                   onPress={() => !isDisabled && onToggleSelection(item)}
+                  onLongPress={() => !isDisabled && handleLongPress(item)}
+                  delayLongPress={300}
                   activeOpacity={isDisabled ? 1 : 0.7}
                 >
                   <Image
@@ -120,6 +183,15 @@ export function CustomGalleryPicker({
                 </TouchableOpacity>
               );
             }}
+            renderSectionHeader={({ section: { title } }) => (
+              <View style={[styles.customGallerySectionHeader, { backgroundColor: colors.background }]}>
+                <Text style={[styles.customGallerySectionTitle, { color: colors.textSecondary }]}>
+                  {formatDateTitle(title)}
+                </Text>
+              </View>
+            )}
+            contentContainerStyle={styles.customGalleryGrid}
+            stickySectionHeadersEnabled={false}
             ListEmptyComponent={
               <View style={styles.customGalleryEmpty}>
                 <Text style={{ color: colors.textSecondary }}>没有可选择的图片</Text>
@@ -143,6 +215,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerBtn: {
+    minWidth: 50,
   },
   customGalleryCancelText: {
     fontSize: 16,
@@ -169,6 +244,14 @@ const styles = StyleSheet.create({
   customGalleryGrid: {
     padding: 2,
   },
+  customGallerySectionHeader: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  customGallerySectionTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   customGalleryItem: {
     width: '25%',
     aspectRatio: 1,
@@ -178,7 +261,8 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   customGalleryImage: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: 4,
   },
   customGalleryImageDisabled: {
