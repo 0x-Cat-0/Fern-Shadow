@@ -8,29 +8,24 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
-  useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useTheme } from '../hooks/useTheme';
 import { recognizePlant, imageUriToBase64, PlantResult } from '../utils/baiduPlantApi';
-import type { RootStackParamList } from '../types';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PlantRecognitionScreen() {
-  const navigation = useNavigation<NavigationProp>();
   const colors = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
 
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<PlantResult[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showSourceModal, setShowSourceModal] = useState(false);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   // 请求相机权限
   const requestCameraPermission = async (): Promise<boolean> => {
@@ -54,6 +49,7 @@ export default function PlantRecognitionScreen() {
 
   // 拍照识别
   const handleTakePhoto = async () => {
+    setShowSourceModal(false);
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) return;
 
@@ -72,6 +68,7 @@ export default function PlantRecognitionScreen() {
 
   // 从相册选择
   const handlePickFromLibrary = async () => {
+    setShowSourceModal(false);
     const hasPermission = await requestLibraryPermission();
     if (!hasPermission) return;
 
@@ -97,7 +94,6 @@ export default function PlantRecognitionScreen() {
     try {
       let base64Data = imageData;
 
-      // 如果传入的是 URI 而不是 base64，需要转换
       if (!imageData.startsWith('/9') && !imageData.startsWith('iVBOR')) {
         base64Data = await imageUriToBase64(uri);
       }
@@ -116,18 +112,14 @@ export default function PlantRecognitionScreen() {
     }
   };
 
-  // 使用识别结果创建植物
-  const handleCreatePlant = (plantName: string) => {
-    navigation.navigate('CreateIndividual', {
-      imageSource: 'library',
-    });
-  };
-
   // 重新选择图片
   const handleReselect = () => {
-    setSelectedImage(null);
-    setResults([]);
-    setError(null);
+    setShowSourceModal(true);
+  };
+
+  // 展开/收起详情
+  const toggleExpand = (index: number) => {
+    setExpandedIndex(expandedIndex === index ? null : index);
   };
 
   return (
@@ -147,45 +139,36 @@ export default function PlantRecognitionScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* 没有选择图片时，显示默认图和按钮 */}
-        {!selectedImage && (
-          <View style={styles.selectArea}>
-            {/* 默认图标 */}
-            <View style={[styles.iconContainer, { backgroundColor: colors.surface }]}>
+        {/* 图片预览区域 - 点击可选择图片 */}
+        <TouchableOpacity
+          style={[styles.imageArea, { backgroundColor: colors.surface }]}
+          onPress={() => setShowSourceModal(true)}
+          activeOpacity={0.8}
+        >
+          {selectedImage ? (
+            <>
+              <Image
+                source={{ uri: selectedImage }}
+                style={styles.selectedImage}
+                resizeMode="cover"
+              />
+              <View style={styles.imageHint}>
+                <Text style={styles.imageHintText}>点击更换图片</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.placeholderContent}>
               <Image
                 source={require('../../assets/icons/icon.png')}
-                style={styles.defaultIcon}
+                style={styles.placeholderIcon}
                 resizeMode="contain"
               />
+              <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+                点击上传植物图片
+              </Text>
             </View>
-
-            <Text style={[styles.selectTitle, { color: colors.textPrimary }]}>
-              拍摄或选择植物图片
-            </Text>
-            <Text style={[styles.selectSubtitle, { color: colors.textSecondary }]}>
-              识别植物种类
-            </Text>
-
-            {/* 按钮组 */}
-            <View style={styles.buttonGroup}>
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.primary }]}
-                onPress={handleTakePhoto}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.buttonText}>拍照识别</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.buttonSecondary, { borderColor: colors.primary }]}
-                onPress={handlePickFromLibrary}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.buttonTextSecondary, { color: colors.primary }]}>相册选择</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          )}
+        </TouchableOpacity>
 
         {/* 加载中 */}
         {loading && (
@@ -197,87 +180,122 @@ export default function PlantRecognitionScreen() {
           </View>
         )}
 
-        {/* 显示选中的图片和结果 */}
-        {selectedImage && !loading && (
-          <View style={styles.resultArea}>
-            {/* 图片预览 */}
-            <View style={[styles.imageWrapper, { backgroundColor: colors.surface }]}>
-              <Image
-                source={{ uri: selectedImage }}
-                style={styles.selectedImage}
-                resizeMode="cover"
-              />
-              <View style={styles.imageOverlay}>
-                <TouchableOpacity
-                  style={[styles.changeBtn, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-                  onPress={handleReselect}
-                >
-                  <Text style={styles.changeBtnText}>更换图片</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        {/* 识别结果 */}
+        {results.length > 0 && !loading && (
+          <View style={styles.resultsSection}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+              识别结果
+            </Text>
 
-            {/* 识别结果列表 */}
-            {results.length > 0 && (
-              <View style={styles.resultsSection}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                  识别结果
-                </Text>
-                <View style={styles.resultsList}>
-                  {results.map((result, index) => (
-                    <View
-                      key={index}
-                      style={[styles.resultCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    >
-                      <View style={styles.resultTop}>
-                        <View style={styles.resultInfo}>
-                          <Text style={[styles.resultName, { color: colors.textPrimary }]}>
-                            {result.name}
-                          </Text>
-                          <Text style={[styles.resultScore, { color: colors.textSecondary }]}>
-                            置信度 {Math.round(result.probability! * 100)}%
-                          </Text>
-                        </View>
-                        {index === 0 && (
-                          <View style={[styles.topBadge, { backgroundColor: colors.primary }]}>
-                            <Text style={styles.topBadgeText}>最佳匹配</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {result.description && (
-                        <Text style={[styles.resultDesc, { color: colors.textSecondary }]} numberOfLines={3}>
-                          {result.description}
-                        </Text>
-                      )}
-
-                      <TouchableOpacity
-                        style={[styles.createBtn, { backgroundColor: colors.primary }]}
-                        onPress={() => handleCreatePlant(result.name)}
+            {results.slice(0, 5).map((result, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.resultItem,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  index === 0 && { borderColor: colors.primary, borderWidth: 2 },
+                ]}
+                onPress={() => toggleExpand(index)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.resultLeft}>
+                  <Text style={[styles.resultRank, { color: index === 0 ? colors.primary : colors.textDisabled }]}>
+                    {index + 1}
+                  </Text>
+                  <View style={styles.resultInfo}>
+                    <Text style={[styles.resultName, { color: colors.textPrimary }]}>
+                      {result.name}
+                    </Text>
+                    {result.description && (
+                      <Text
+                        style={[styles.resultDesc, { color: colors.textSecondary }]}
+                        numberOfLines={expandedIndex === index ? undefined : 2}
                       >
-                        <Text style={styles.createBtnText}>创建植物记录</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+                        {result.description}
+                      </Text>
+                    )}
+                    {expandedIndex === index && result.imageUrl && (
+                      <Image
+                        source={{ uri: result.imageUrl }}
+                        style={styles.exampleImage}
+                        resizeMode="cover"
+                      />
+                    )}
+                    {result.probability !== undefined && (
+                      <View style={styles.resultMeta}>
+                        <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+                          <View
+                            style={[
+                              styles.progressFill,
+                              { backgroundColor: index === 0 ? colors.primary : colors.textSecondary, width: `${Math.round(result.probability * 100)}%` },
+                            ]}
+                          />
+                        </View>
+                        <Text style={[styles.resultScore, { color: colors.textSecondary }]}>
+                          {Math.round(result.probability * 100)}%
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            )}
+                {index === 0 && (
+                  <View style={[styles.topIcon, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.topIconText}>最优</Text>
+                  </View>
+                )}
+                {result.description && (
+                  <Text style={[styles.expandIcon, { color: colors.textDisabled }]}>
+                    {expandedIndex === index ? '收起' : '展开'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-            {/* 错误提示 */}
-            {error && (
-              <View style={[styles.errorCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
-                <TouchableOpacity
-                  style={[styles.errorBtn, { borderColor: colors.primary }]}
-                  onPress={handleReselect}
-                >
-                  <Text style={[styles.errorBtnText, { color: colors.primary }]}>重新选择图片</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+        {/* 错误提示 */}
+        {error && !loading && (
+          <View style={[styles.errorBox, { borderColor: colors.border }]}>
+            <Text style={[styles.errorText, { color: colors.textSecondary }]}>{error}</Text>
           </View>
         )}
       </ScrollView>
+
+      {/* 图片来源选择弹窗 */}
+      <Modal
+        visible={showSourceModal}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setShowSourceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSourceModal(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={handleTakePhoto}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>拍照</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={handlePickFromLibrary}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>从相册选择</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnCancel]}
+              onPress={() => setShowSourceModal(false)}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textDisabled }]}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -300,97 +318,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    flexGrow: 1,
     padding: 20,
-  },
-  selectArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 60,
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  defaultIcon: {
-    width: 80,
-    height: 80,
-  },
-  selectTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  selectSubtitle: {
-    fontSize: 14,
-    marginBottom: 32,
-  },
-  buttonGroup: {
-    width: '100%',
-    maxWidth: 280,
-    gap: 12,
-  },
-  button: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buttonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  buttonTextSecondary: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loadingArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-    paddingBottom: 60,
-  },
-  loadingText: {
-    fontSize: 16,
-  },
-  resultArea: {
     gap: 20,
   },
-  imageWrapper: {
+  imageArea: {
+    width: '100%',
+    aspectRatio: 4 / 3,
     borderRadius: 16,
     overflow: 'hidden',
   },
   selectedImage: {
     width: '100%',
-    height: 220,
+    height: '100%',
   },
-  imageOverlay: {
+  imageHint: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 12,
-    alignItems: 'flex-end',
-  },
-  changeBtn: {
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    borderRadius: 14,
   },
-  changeBtnText: {
-    fontSize: 13,
+  imageHintText: {
+    fontSize: 12,
     color: '#FFFFFF',
-    fontWeight: '500',
+  },
+  placeholderContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  placeholderIcon: {
+    width: 80,
+    height: 80,
+    opacity: 0.6,
+  },
+  placeholderText: {
+    fontSize: 15,
+  },
+  loadingArea: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 15,
   },
   resultsSection: {
     gap: 12,
@@ -400,75 +374,109 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 4,
   },
-  resultsList: {
-    gap: 12,
-  },
-  resultCard: {
-    padding: 16,
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1,
   },
-  resultTop: {
+  resultLeft: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  resultRank: {
+    fontSize: 16,
+    fontWeight: '700',
+    width: 20,
+    textAlign: 'center',
   },
   resultInfo: {
     flex: 1,
+    gap: 6,
   },
   resultName: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  resultScore: {
-    fontSize: 13,
-  },
-  topBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-  topBadgeText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
   },
   resultDesc: {
     fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 18,
+    marginTop: 4,
   },
-  createBtn: {
-    paddingVertical: 12,
+  exampleImage: {
+    width: '100%',
+    height: 150,
     borderRadius: 8,
+    marginTop: 8,
+  },
+  resultMeta: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  createBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
+  progressBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  progressFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  resultScore: {
+    fontSize: 12,
+    minWidth: 40,
+  },
+  topIcon: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  topIconText: {
+    fontSize: 11,
     color: '#FFFFFF',
+    fontWeight: '600',
   },
-  errorCard: {
-    padding: 20,
+  expandIcon: {
+    fontSize: 12,
+    marginLeft: 8,
+  },
+  errorBox: {
+    padding: 16,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
-    gap: 12,
   },
   errorText: {
     fontSize: 14,
     textAlign: 'center',
   },
-  errorBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
   },
-  errorBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingBottom: 40,
+  },
+  modalBtn: {
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalBtnCancel: {
+    borderBottomWidth: 0,
+  },
+  modalBtnText: {
+    fontSize: 16,
   },
 });

@@ -55,6 +55,7 @@ export interface PlantResult {
   latinName?: string;     // 拉丁学名
   probability?: number;   // 置信度 0-1
   description?: string;   // 植物描述
+  imageUrl?: string;      // 百科示例图片
 }
 
 // API 返回的原始结果
@@ -104,6 +105,7 @@ export async function recognizePlant(imageBase64: string): Promise<PlantResult[]
         name: item.name,
         probability: item.score,
         description: item.baike_info?.description,
+        imageUrl: item.baike_info?.image_url,
       }));
     }
 

@@ -11,6 +11,8 @@ import { useTheme } from '../hooks/useTheme';
 
 interface AddImageModalProps {
   visible: boolean;
+  useSystemAlbum: boolean;
+  onUseSystemAlbumToggle: (value: boolean) => void;
   hideAlreadyAdded: boolean;
   onHideToggle: (value: boolean) => void;
   onClose: () => void;
@@ -20,6 +22,8 @@ interface AddImageModalProps {
 
 export function AddImageModal({
   visible,
+  useSystemAlbum,
+  onUseSystemAlbumToggle,
   hideAlreadyAdded,
   onHideToggle,
   onClose,
@@ -42,18 +46,35 @@ export function AddImageModal({
         onPress={onClose}
       >
         <View style={[styles.addImageModalContent, { backgroundColor: colors.surface }]}>
-          {/* 隐藏已添加开关 - 左侧描述，右侧开关 */}
+          {/* 使用系统相册开关 */}
           <View style={styles.addImageHideToggle}>
             <Text style={[styles.addImageHideToggleText, { color: colors.textPrimary }]}>
-              隐藏已添加的图片
+              使用系统相册
             </Text>
             <Switch
-              value={hideAlreadyAdded}
-              onValueChange={onHideToggle}
+              value={useSystemAlbum}
+              onValueChange={onUseSystemAlbumToggle}
               trackColor={{ false: '#e0e0e0', true: colors.primary }}
               thumbColor="#fff"
             />
           </View>
+          {/* 隐藏已添加开关 - 仅在使用自定义相册时显示 */}
+          {!useSystemAlbum && (
+            <>
+              <View style={[styles.addImageModalDivider, { backgroundColor: colors.border, marginBottom: 0 }]} />
+              <View style={styles.addImageHideToggle}>
+                <Text style={[styles.addImageHideToggleText, { color: colors.textPrimary }]}>
+                  隐藏已添加的图片
+                </Text>
+                <Switch
+                  value={hideAlreadyAdded}
+                  onValueChange={onHideToggle}
+                  trackColor={{ false: '#e0e0e0', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </>
+          )}
           <View style={[styles.addImageModalDivider, { backgroundColor: colors.border }]} />
           <TouchableOpacity style={styles.addImageModalBtn} onPress={onTakePhoto}>
             <Text style={[styles.addImageModalBtnText, { color: '#333333' }]}>拍照</Text>
@@ -90,7 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    height: 50,
     paddingHorizontal: 4,
   },
   addImageHideToggleText: {

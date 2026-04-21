@@ -83,7 +83,9 @@ export default function IndividualDetailScreen() {
   const [showAddImageModal, setShowAddImageModal] = useState(false);
   const [addImageRecordId, setAddImageRecordId] = useState<number | null>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  // 是否隐藏已添加的图片（开关开启时隐藏，关闭时显示但标记）
+  // 使用系统相册（开关开启时使用系统相册，关闭时使用自定义相册）
+  const [useSystemAlbum, setUseSystemAlbum] = useState(false);
+  // 是否隐藏已添加的图片（开关开启时隐藏，关闭时显示但标记）- 仅在使用自定义相册时有效
   const [hideAlreadyAdded, setHideAlreadyAdded] = useState(true);
   const [existingAssetIds, setExistingAssetIds] = useState<string[]>([]);  // 该植物已添加的 assetId 列表
 
@@ -538,6 +540,12 @@ export default function IndividualDetailScreen() {
   const openCustomGallery = async () => {
     setShowAddImageModal(false);
 
+    // 如果使用系统相册，直接调用系统图片选择器
+    if (useSystemAlbum) {
+      await pickFromImagePicker();
+      return;
+    }
+
     try {
       // 尝试使用 MediaLibrary 获取设备相册
       let useMediaLibrary = false;
@@ -579,7 +587,8 @@ export default function IndividualDetailScreen() {
       setGalleryLoading(false);
     } catch (error) {
       console.error('Failed to load gallery images:', error);
-      // 发生错误时回退到 ImagePicker
+      // 发生错误时自动开启系统相册并回退到 ImagePicker
+      setUseSystemAlbum(true);
       await pickFromImagePicker();
     }
   };
@@ -1198,6 +1207,8 @@ export default function IndividualDetailScreen() {
       {/* 添加图片弹窗 */}
       <AddImageModal
         visible={showAddImageModal}
+        useSystemAlbum={useSystemAlbum}
+        onUseSystemAlbumToggle={setUseSystemAlbum}
         hideAlreadyAdded={hideAlreadyAdded}
         onHideToggle={setHideAlreadyAdded}
         onClose={() => setShowAddImageModal(false)}
