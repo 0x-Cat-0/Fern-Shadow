@@ -20,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 
 import { useTheme } from '../hooks/useTheme';
+import { useSettingsStore } from '../store/settingsStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
 import { copyImageToDocumentDirectory, deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
 import type { Individual, Group, RootStackParamList } from '../types';
@@ -164,17 +166,26 @@ export default function IndividualDetailScreen() {
     try {
       const recordsData = await RecordRepository.findByIndividualId(individualId);
       const allAssetIds: string[] = [];
+      const allUris: string[] = [];
       for (const record of recordsData) {
         const assetIds: string[] = Array.isArray(record.imageAssetIds)
           ? record.imageAssetIds
           : record.imageAssetIds ? [record.imageAssetIds] : [];
+        const uris: string[] = Array.isArray(record.imagePath)
+          ? record.imagePath
+          : record.imagePath ? [record.imagePath] : [];
         allAssetIds.push(...assetIds);
+        allUris.push(...uris);
       }
       setExistingAssetIds(allAssetIds);
+      setExistingUris(allUris);
     } catch (error) {
       console.error('Failed to load existing assetIds:', error);
     }
   }, [individualId]);
+
+  // 该植物已添加的图片 URI 列表（用于相册中判断是否已添加）
+  const [existingUris, setExistingUris] = useState<string[]>([]);
 
   // 是否有今天的记录
   const [hasTodayRecord, setHasTodayRecord] = useState(false);
@@ -267,9 +278,9 @@ export default function IndividualDetailScreen() {
   };
 
   // 点击添加图片 - 显示图片选择弹窗
-  const handleAddImage = (recordId: number) => {
+  const handleAddImage = async (recordId: number) => {
     setAddImageRecordId(recordId);
-    loadExistingAssetIds();  // 加载已添加的 assetId 列表
+    await loadExistingAssetIds();  // 加载已添加的 assetId 列表
     setShowAddImageModal(true);
   };
 
@@ -296,7 +307,7 @@ export default function IndividualDetailScreen() {
 
       // 显示添加图片弹窗
       setAddImageRecordId(newRecordId);
-      loadExistingAssetIds();  // 加载已添加的 assetId 列表
+      await loadExistingAssetIds();  // 加载已添加的 assetId 列表
       setShowAddImageModal(true);
     } catch (error) {
       console.error('Failed to create today record:', error);
@@ -347,8 +358,12 @@ export default function IndividualDetailScreen() {
     if (!result.canceled && result.assets.length > 0) {
       const asset = result.assets[0];
       const timestamp = getImageCreationTime(asset);
-      // 复制到文档目录获取永久路径
-      const permanentUri = await copyImageToDocumentDirectory(asset.uri);
+      // 根据设置决定是否复制到应用目录
+      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
+      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
+      const permanentUri = copyImageToApp
+        ? await copyImageToDocumentDirectory(asset.uri)
+        : asset.uri;
       await saveNewImages([permanentUri], timestamp);
     }
   };
@@ -389,14 +404,25 @@ export default function IndividualDetailScreen() {
         }
       }
 
+      // 根据设置决定是否复制图片
+      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
+      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
+
       // 按日期分组图片，同时收集 assetId
       const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
 
       for (const asset of assetsToAdd) {
         const uri = asset.uri;
         const assetId = asset.assetId || '';
-        // 尝试从 MediaLibrary 获取完整的时间信息
-        const timestamp = await getImageCreationTimeFromUri(uri);
+        // 如果不复制图片，直接使用 ImagePicker 返回的 creationTime（来自 EXIF），避免调用 getAssetInfoAsync
+        // 如果需要复制，则调用 getAssetInfoAsync 获取更准确的信息
+        let timestamp: number;
+        if (copyImageToApp) {
+          timestamp = await getImageCreationTimeFromUri(uri);
+        } else {
+          // 直接使用 ImagePicker 返回的 creationTime（来自 EXIF）
+          timestamp = asset.creationTime || Date.now();
+        }
 
         // 找到该日期所在的分组键（使用日期戳的起始-of-day）
         const dayKey = getStartOfDay(timestamp);
@@ -408,12 +434,19 @@ export default function IndividualDetailScreen() {
         imagesByDate.get(dayKey)!.assetIds.push(assetId);
       }
 
-      // 复制到文档目录并保存
+      // 按日期分组并准备保存
       const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
 
       for (const [dayKey, data] of imagesByDate) {
-        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
+        let uris: string[];
+        if (copyImageToApp) {
+          // 复制到应用目录
+          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        } else {
+          // 直接使用原路径
+          uris = data.uris;
+        }
+        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
       }
 
       // 分别保存每个日期组的图片
@@ -583,6 +616,7 @@ export default function IndividualDetailScreen() {
       });
 
       setGalleryImages(assets.assets);
+      await loadExistingAssetIds();
       setShowCustomGallery(true);
       setGalleryLoading(false);
     } catch (error) {
@@ -661,12 +695,24 @@ export default function IndividualDetailScreen() {
         imagesByDate.get(dayKey)!.assetIds.push(assetId);
       }
 
-      // 复制到文档目录并保存
+      // 根据设置决定是复制图片还是使用原URI
+      // 直接从 AsyncStorage 读取设置，确保获取最新值
+      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
+      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
+
+      // 按日期分组并准备保存
       const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
 
       for (const [dayKey, data] of imagesByDate) {
-        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
+        let uris: string[];
+        if (copyImageToApp) {
+          // 复制到应用目录
+          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        } else {
+          // 直接使用原路径
+          uris = data.uris;
+        }
+        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
       }
 
       // 分别保存每个日期组的图片
@@ -740,21 +786,35 @@ export default function IndividualDetailScreen() {
         return;
       }
 
-      // 获取每个图片的永久 URI
+      // 获取每个图片的 URI
+      // 当 copyImageToApp = false 时，直接使用原始 URI，不调用 getAssetInfoAsync（避免系统创建本地缓存）
+      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
+      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
+
       const assetsWithUri: { uri: string; assetId: string; timestamp: number }[] = [];
       for (const asset of selectedAssets) {
-        try {
-          const info = await MediaLibrary.getAssetInfoAsync(asset);
-          const permanentUri = typeof info === 'string' ? info : info.uri;
-          if (permanentUri) {
-            assetsWithUri.push({
-              uri: permanentUri,
-              assetId: asset.id || '',
-              timestamp: asset.creationTime || Date.now(),
-            });
+        if (copyImageToApp) {
+          // 需要复制到应用目录时，获取永久 URI
+          try {
+            const info = await MediaLibrary.getAssetInfoAsync(asset);
+            const permanentUri = typeof info === 'string' ? info : info.uri;
+            if (permanentUri) {
+              assetsWithUri.push({
+                uri: permanentUri,
+                assetId: asset.id || '',
+                timestamp: asset.creationTime || Date.now(),
+              });
+            }
+          } catch (error) {
+            console.error('Failed to get asset info:', error);
           }
-        } catch (error) {
-          console.error('Failed to get asset info:', error);
+        } else {
+          // 不复制时，直接使用原始 URI
+          assetsWithUri.push({
+            uri: asset.uri,
+            assetId: asset.id || '',
+            timestamp: asset.creationTime || Date.now(),
+          });
         }
       }
 
@@ -769,11 +829,18 @@ export default function IndividualDetailScreen() {
         imagesByDate.get(dayKey)!.assetIds.push(img.assetId);
       }
 
-      // 复制到文档目录并保存
+      // 按日期分组并准备保存
       const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
       for (const [dayKey, data] of imagesByDate) {
-        const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        imagesToSaveByDate.set(dayKey, { uris: permanentUris, assetIds: data.assetIds });
+        let uris: string[];
+        if (copyImageToApp) {
+          // 复制到应用目录
+          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+        } else {
+          // 直接使用原路径
+          uris = data.uris;
+        }
+        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
       }
 
       // 分别保存每个日期组的图片
@@ -1233,6 +1300,7 @@ export default function IndividualDetailScreen() {
         images={galleryImages}
         selectedIds={gallerySelectedIds}
         existingAssetIds={existingAssetIds}
+        existingUris={existingUris}
         hideAlreadyAdded={hideAlreadyAdded}
         loading={galleryLoading}
         onClose={closeCustomGallery}

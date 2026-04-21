@@ -5,9 +5,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../hooks/useTheme';
+import { useSettingsStore } from '../store/settingsStore';
 
 interface SideDrawerProps {
   visible: boolean;
@@ -87,9 +89,22 @@ export function SideDrawer({ visible, onClose }: SideDrawerProps) {
         <View style={styles.drawerContent}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>设置</Text>
 
-          <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>
-            图片已设置为始终复制到应用目录
-          </Text>
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>
+                复制图片到应用目录
+              </Text>
+              <Text style={[styles.settingDesc, { color: colors.textSecondary }]}>
+                关闭时直接使用原图链接，更节省空间
+              </Text>
+            </View>
+            <Switch
+              value={useSettingsStore.getState().copyImageToApp}
+              onValueChange={(value) => useSettingsStore.getState().setCopyImageToApp(value)}
+              trackColor={{ false: '#e0e0e0', true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
         </View>
 
         <TouchableOpacity

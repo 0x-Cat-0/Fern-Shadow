@@ -2,7 +2,7 @@
   "expo": {
     "name": "蕨影",
     "slug": "fern-shadow",
-    "version": "1.1.0",
+    "version": "1.2.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/icon.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zhangying.app",
+      "bundleIdentifier": "com.fernshadow.app",
       "infoPlist": {
         "CFBundleDisplayName": "蕨影",
         "CFBundleName": "FernShadow"
@@ -27,8 +27,8 @@
         "foregroundImage": "./assets/icons/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.zhangying.app",
-      "versionCode": 5,
+      "package": "com.fernshadow.app",
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -40,9 +40,7 @@
         "android.permission.READ_MEDIA_AUDIO"
       ]
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.2.0",
     "plugins": [
       [
         "expo-image-picker",

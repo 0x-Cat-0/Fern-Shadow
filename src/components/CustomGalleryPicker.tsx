@@ -1,31 +1,34 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   Image,
   TouchableOpacity,
-  SectionList,
   Modal,
   StyleSheet,
   ActivityIndicator,
   Switch,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { useTheme } from '../hooks/useTheme';
+
+const NUM_COLUMNS = 4;
 
 interface CustomGalleryPickerProps {
   visible: boolean;
   images: MediaLibrary.Asset[];
   selectedIds: string[];
   existingAssetIds: string[];
+  existingUris: string[];
   hideAlreadyAdded: boolean;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
   onToggleSelection: (asset: MediaLibrary.Asset) => void;
   onHideToggle: (value: boolean) => void;
-  onLongPressSelection?: (asset: MediaLibrary.Asset) => void;  // 长按选择回调
+  onLongPressSelection?: (asset: MediaLibrary.Asset) => void;
 }
 
 // 按日期分组的数据结构
@@ -35,10 +38,19 @@ interface GallerySection {
 }
 
 // 将图片按日期分组
-function groupImagesByDate(images: MediaLibrary.Asset[], existingAssetIds: string[] = [], hideAlreadyAdded: boolean = false): GallerySection[] {
+function groupImagesByDate(images: MediaLibrary.Asset[], existingAssetIds: string[] = [], existingUris: string[] = [], hideAlreadyAdded: boolean = false): GallerySection[] {
   // 如果开启隐藏，则过滤掉已添加的图片
-  const filteredImages = hideAlreadyAdded && existingAssetIds.length > 0
-    ? images.filter(img => !(img.id && existingAssetIds.includes(img.id)))
+  // 同时用 assetId 和 URI 判断，URI 判断更准确
+  const filteredImages = hideAlreadyAdded && (existingAssetIds.length > 0 || existingUris.length > 0)
+    ? images.filter(img => {
+        // 先用 URI 判断（更准确）
+        const imgUri = img.uri;
+        const isAlreadyAddedByUri = existingUris.some(uri => uri === imgUri || imgUri.includes(uri) || uri.includes(imgUri));
+        if (isAlreadyAddedByUri) return false;
+        // 再用 assetId 判断（备用）
+        if (img.id && existingAssetIds.includes(img.id)) return false;
+        return true;
+      })
     : images;
 
   const groups = new Map<string, MediaLibrary.Asset[]>();
@@ -77,11 +89,56 @@ function formatDateTitle(dateStr: string): string {
   return dateStr;
 }
 
+// 图片项组件
+function ImageItem({
+  item,
+  isSelected,
+  isAlreadyAdded,
+  isDisabled,
+  onPress,
+  onLongPress,
+  colors
+}: {
+  item: MediaLibrary.Asset;
+  isSelected: boolean;
+  isAlreadyAdded: boolean;
+  isDisabled: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+  colors: any;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.itemContainer, isDisabled && styles.itemDisabled]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      activeOpacity={isDisabled ? 1 : 0.7}
+      disabled={isDisabled}
+    >
+      <Image source={{ uri: item.uri }} style={styles.itemImage} />
+      {isAlreadyAdded && !isDisabled && (
+        <View style={styles.markedBadge}>
+          <Text style={styles.markedText}>✓</Text>
+        </View>
+      )}
+      {isSelected && (
+        <View style={[styles.selectedBorder, { borderColor: colors.primary }]}>
+          <View style={[styles.selectedBadge, { backgroundColor: colors.primary }]}>
+            <Text style={styles.selectedText}>✓</Text>
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export function CustomGalleryPicker({
   visible,
   images,
   selectedIds,
   existingAssetIds,
+  existingUris,
   hideAlreadyAdded,
   loading,
   onClose,
@@ -93,41 +150,38 @@ export function CustomGalleryPicker({
   const colors = useTheme();
   const insets = useSafeAreaInsets();
 
-  // 长按选择模式
-  const handleLongPress = (asset: MediaLibrary.Asset) => {
-    if (onLongPressSelection) {
-      onLongPressSelection(asset);
-    } else {
-      // 默认行为：直接切换选择状态
-      onToggleSelection(asset);
+  // 按日期分组
+  const sections = useMemo(() => groupImagesByDate(images, existingAssetIds, existingUris, hideAlreadyAdded), [images, existingAssetIds, existingUris, hideAlreadyAdded]);
+
+  // 处理长按选择
+  const handleLongPress = useCallback((asset: MediaLibrary.Asset) => {
+    // 长按选中当前项
+    if (asset.id) {
+      onLongPressSelection?.(asset);
     }
-  };
+  }, [onLongPressSelection]);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={[styles.customGalleryContainer, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         {/* 顶部栏 */}
-        <View style={[styles.customGalleryHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-            <Text style={[styles.customGalleryCancelText, { color: colors.textSecondary }]}>取消</Text>
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>取消</Text>
           </TouchableOpacity>
-          <Text style={[styles.customGalleryTitle, { color: colors.textPrimary }]}>
-            选择图片 {selectedIds.length > 0 && `(${selectedIds.length})`}
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            选择图片{selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}
           </Text>
           <TouchableOpacity onPress={onConfirm} style={styles.headerBtn}>
-            <Text style={[styles.customGalleryConfirmText, { color: selectedIds.length > 0 ? colors.primary : colors.textDisabled }]}>
+            <Text style={[styles.confirmText, { color: selectedIds.length > 0 ? colors.primary : colors.textDisabled }]}>
               完成
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* 模式切换栏 */}
-        <View style={[styles.customGalleryModeBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <Text style={[styles.customGalleryModeText, { color: colors.textPrimary }]}>
+        <View style={[styles.modeBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <Text style={[styles.modeText, { color: colors.textPrimary }]}>
             {hideAlreadyAdded ? '隐藏已添加' : '显示全部'}
           </Text>
           <Switch
@@ -140,64 +194,43 @@ export function CustomGalleryPicker({
 
         {/* 图片网格 */}
         {loading ? (
-          <View style={styles.customGalleryLoading}>
+          <View style={styles.loading}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
+        ) : sections.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={{ color: colors.textSecondary }}>没有可选择的图片</Text>
+          </View>
         ) : (
-          <SectionList
-            sections={useMemo(() => groupImagesByDate(images, existingAssetIds, hideAlreadyAdded), [images, existingAssetIds, hideAlreadyAdded])}
-            keyExtractor={(item) => item.id || String(item.uri)}
-            renderItem={({ item }) => {
-              const isSelected = item.id ? selectedIds.includes(item.id) : false;
-              const isAlreadyAdded = item.id ? existingAssetIds.includes(item.id) : false;
-              const isDisabled = hideAlreadyAdded && isAlreadyAdded;
-
-              return (
-                <TouchableOpacity
-                  style={[styles.customGalleryItem, isDisabled && styles.customGalleryItemDisabled]}
-                  onPress={() => !isDisabled && onToggleSelection(item)}
-                  onLongPress={() => !isDisabled && handleLongPress(item)}
-                  delayLongPress={300}
-                  activeOpacity={isDisabled ? 1 : 0.7}
-                >
-                  <Image
-                    source={{ uri: item.uri }}
-                    style={[styles.customGalleryImage, isDisabled && styles.customGalleryImageDisabled]}
-                  />
-                  {/* 已添加标记（仅在非隐藏模式下显示） */}
-                  {!hideAlreadyAdded && isAlreadyAdded && (
-                    <View style={styles.customGalleryMarkedOverlay}>
-                      <View style={[styles.customGalleryMarkedIcon, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-                        <Text style={styles.customGalleryMarkedCheck}>✓</Text>
-                      </View>
-                    </View>
-                  )}
-                  {/* 选中标记 */}
-                  {isSelected && !isDisabled && (
-                    <View style={[styles.customGallerySelectedOverlay, { borderColor: colors.primary }]}>
-                      <View style={[styles.customGallerySelectedIcon, { backgroundColor: colors.primary }]}>
-                        <Text style={styles.customGallerySelectedCheck}>✓</Text>
-                      </View>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            }}
-            renderSectionHeader={({ section: { title } }) => (
-              <View style={[styles.customGallerySectionHeader, { backgroundColor: colors.background }]}>
-                <Text style={[styles.customGallerySectionTitle, { color: colors.textSecondary }]}>
-                  {formatDateTitle(title)}
+          <ScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
+            {sections.map((section) => (
+              <View key={section.title} style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                  {formatDateTitle(section.title)}
                 </Text>
+                <View style={styles.grid}>
+                  {section.data.map((item) => {
+                    const isSelected = item.id ? selectedIds.includes(item.id) : false;
+                    const isAlreadyAdded = item.id ? existingAssetIds.includes(item.id) : false;
+                    const isDisabled = hideAlreadyAdded && isAlreadyAdded;
+
+                    return (
+                      <ImageItem
+                        key={item.id || String(item.uri)}
+                        item={item}
+                        isSelected={isSelected}
+                        isAlreadyAdded={isAlreadyAdded}
+                        isDisabled={isDisabled}
+                        onPress={() => onToggleSelection(item)}
+                        onLongPress={() => handleLongPress(item)}
+                        colors={colors}
+                      />
+                    );
+                  })}
+                </View>
               </View>
-            )}
-            contentContainerStyle={styles.customGalleryGrid}
-            stickySectionHeadersEnabled={false}
-            ListEmptyComponent={
-              <View style={styles.customGalleryEmpty}>
-                <Text style={{ color: colors.textSecondary }}>没有可选择的图片</Text>
-              </View>
-            }
-          />
+            ))}
+          </ScrollView>
         )}
       </View>
     </Modal>
@@ -205,10 +238,10 @@ export function CustomGalleryPicker({
 }
 
 const styles = StyleSheet.create({
-  customGalleryContainer: {
+  container: {
     flex: 1,
   },
-  customGalleryHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -219,18 +252,19 @@ const styles = StyleSheet.create({
   headerBtn: {
     minWidth: 50,
   },
-  customGalleryCancelText: {
+  cancelText: {
     fontSize: 16,
   },
-  customGalleryTitle: {
+  title: {
     fontSize: 17,
     fontWeight: '600',
   },
-  customGalleryConfirmText: {
+  confirmText: {
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'right',
   },
-  customGalleryModeBar: {
+  modeBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -238,63 +272,70 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  customGalleryModeText: {
+  modeText: {
     fontSize: 14,
   },
-  customGalleryGrid: {
-    padding: 2,
+  scrollView: {
+    flex: 1,
   },
-  customGallerySectionHeader: {
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  empty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '500',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  customGallerySectionTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 1,
   },
-  customGalleryItem: {
+  itemContainer: {
     width: '25%',
     aspectRatio: 1,
-    padding: 2,
+    padding: 1,
   },
-  customGalleryItemDisabled: {
+  itemDisabled: {
     opacity: 0.3,
   },
-  customGalleryImage: {
+  itemImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 4,
+    backgroundColor: '#f0f0f0',
   },
-  customGalleryImageDisabled: {
-    opacity: 0.5,
-  },
-  customGalleryMarkedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 4,
-    margin: 2,
-  },
-  customGalleryMarkedIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  markedBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  customGalleryMarkedCheck: {
+  markedText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
   },
-  customGallerySelectedOverlay: {
+  selectedBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 3,
-    borderRadius: 4,
-    margin: 2,
   },
-  customGallerySelectedIcon: {
+  selectedBadge: {
     position: 'absolute',
     top: 4,
     right: 4,
@@ -304,19 +345,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  customGallerySelectedCheck: {
+  selectedText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
-  },
-  customGalleryLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  customGalleryEmpty: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });

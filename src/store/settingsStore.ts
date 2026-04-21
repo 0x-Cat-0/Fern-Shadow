@@ -8,7 +8,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  copyImageToApp: true,
+  copyImageToApp: false,
 
   setCopyImageToApp: async (value: boolean) => {
     set({ copyImageToApp: value });
