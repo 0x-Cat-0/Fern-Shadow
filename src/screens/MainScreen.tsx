@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SearchBar } from '../components';
 import { useTheme } from '../hooks/useTheme';
 import { GroupRepository, IndividualRepository, RecordRepository } from '../database/repositories';
-import { deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
 import { spacing } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { Group, Individual, SortType, RootStackParamList } from '../types';
@@ -538,18 +537,6 @@ export default function MainScreen({ viewMode, onViewModeChange, onLeftBtnPress 
           style: 'destructive',
           onPress: async () => {
             try {
-              // 获取该植物的所有记录并删除图片文件
-              const records = await RecordRepository.findByIndividualId(individual.id);
-              for (const record of records) {
-                const paths: string[] = Array.isArray(record.imagePath)
-                  ? record.imagePath
-                  : record.imagePath ? [record.imagePath] : [];
-                for (const path of paths) {
-                  if (path.startsWith(getImageDirectoryPath())) {
-                    await deleteImage(path);
-                  }
-                }
-              }
               await IndividualRepository.delete(individual.id);
               loadData();
             } catch (error) {

@@ -10,7 +10,6 @@ import { ThemeProvider } from './src/contexts/ThemeContext';
 import { useTheme } from './src/hooks/useTheme';
 import { lightColors } from './src/theme/colors';
 import { SideDrawer } from './src/components';
-import { useSettingsStore } from './src/store/settingsStore';
 import MainScreen from './src/screens/MainScreen';
 import PlantRecognitionScreen from './src/screens/PlantRecognitionScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -24,7 +23,6 @@ import CreateRecordScreen from './src/screens/CreateRecordScreen';
 import EditRecordScreen from './src/screens/EditRecordScreen';
 import HelpScreen from './src/screens/HelpScreen';
 import AboutScreen from './src/screens/AboutScreen';
-import StorageManagementScreen from './src/screens/StorageManagementScreen';
 import type { RootStackParamList } from './src/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -73,14 +71,7 @@ function TabContent() {
   const [hideBottomNav, setHideBottomNav] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
-  const [showStorageModal, setShowStorageModal] = useState(false);
   const [showSideDrawer, setShowSideDrawer] = useState(false);
-  const loadSettings = useSettingsStore((state) => state.loadSettings);
-
-  // 初始化加载设置
-  useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
 
   // 监听导航状态变化，隐藏/显示底部导航
   useEffect(() => {
@@ -161,7 +152,6 @@ function TabContent() {
   const profileProps = {
     onHelpPress: () => setShowHelpModal(true),
     onAboutPress: () => setShowAboutModal(true),
-    onStoragePress: () => setShowStorageModal(true),
   };
 
   return (
@@ -284,17 +274,6 @@ function TabContent() {
         onRequestClose={() => setShowAboutModal(false)}
       >
         <AboutScreen onClose={() => setShowAboutModal(false)} />
-      </Modal>
-
-      {/* 存储管理弹窗 */}
-      <Modal
-        visible={showStorageModal}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={() => setShowStorageModal(false)}
-      >
-        <StorageManagementScreen onClose={() => setShowStorageModal(false)} />
       </Modal>
 
       {/* 设置侧边抽屉 */}

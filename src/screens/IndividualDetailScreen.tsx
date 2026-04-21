@@ -20,10 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 
 import { useTheme } from '../hooks/useTheme';
-import { useSettingsStore } from '../store/settingsStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory, deleteImage, getImageDirectoryPath } from '../utils/ImageStorage';
 import type { Individual, Group, RootStackParamList } from '../types';
 import {
   IndividualCard,
@@ -89,7 +86,8 @@ export default function IndividualDetailScreen() {
   const [useSystemAlbum, setUseSystemAlbum] = useState(false);
   // 是否隐藏已添加的图片（开关开启时隐藏，关闭时显示但标记）- 仅在使用自定义相册时有效
   const [hideAlreadyAdded, setHideAlreadyAdded] = useState(true);
-  const [existingAssetIds, setExistingAssetIds] = useState<string[]>([]);  // 该植物已添加的 assetId 列表
+  // 该植物已添加的图片 URI 列表（用于相册中判断是否已添加）
+  const [existingUris, setExistingUris] = useState<string[]>([]);
 
   // 自定义相册选择器状态
   const [showCustomGallery, setShowCustomGallery] = useState(false);
@@ -161,31 +159,22 @@ export default function IndividualDetailScreen() {
     }
   }, [individualId]);
 
-  // 获取该植物所有已添加图片的 assetId 列表
-  const loadExistingAssetIds = useCallback(async () => {
+  // 获取该植物所有已添加图片的 URI 列表（用于相册中判断是否已添加）
+  const loadExistingUris = useCallback(async () => {
     try {
       const recordsData = await RecordRepository.findByIndividualId(individualId);
-      const allAssetIds: string[] = [];
       const allUris: string[] = [];
       for (const record of recordsData) {
-        const assetIds: string[] = Array.isArray(record.imageAssetIds)
-          ? record.imageAssetIds
-          : record.imageAssetIds ? [record.imageAssetIds] : [];
         const uris: string[] = Array.isArray(record.imagePath)
           ? record.imagePath
           : record.imagePath ? [record.imagePath] : [];
-        allAssetIds.push(...assetIds);
         allUris.push(...uris);
       }
-      setExistingAssetIds(allAssetIds);
       setExistingUris(allUris);
     } catch (error) {
-      console.error('Failed to load existing assetIds:', error);
+      console.error('Failed to load existing URIs:', error);
     }
   }, [individualId]);
-
-  // 该植物已添加的图片 URI 列表（用于相册中判断是否已添加）
-  const [existingUris, setExistingUris] = useState<string[]>([]);
 
   // 是否有今天的记录
   const [hasTodayRecord, setHasTodayRecord] = useState(false);
@@ -280,7 +269,7 @@ export default function IndividualDetailScreen() {
   // 点击添加图片 - 显示图片选择弹窗
   const handleAddImage = async (recordId: number) => {
     setAddImageRecordId(recordId);
-    await loadExistingAssetIds();  // 加载已添加的 assetId 列表
+    await loadExistingUris();  // 加载已添加的图片 URI 列表
     setShowAddImageModal(true);
   };
 
@@ -295,7 +284,6 @@ export default function IndividualDetailScreen() {
       const newRecordId = await RecordRepository.create({
         individualId,
         imagePath: [],
-        imageAssetIds: [],
         title: `${dateStr} 记录`,
         description: '',
         recordDate: todayTimestamp,
@@ -307,7 +295,7 @@ export default function IndividualDetailScreen() {
 
       // 显示添加图片弹窗
       setAddImageRecordId(newRecordId);
-      await loadExistingAssetIds();  // 加载已添加的 assetId 列表
+      await loadExistingUris();  // 加载已添加的图片 URI 列表
       setShowAddImageModal(true);
     } catch (error) {
       console.error('Failed to create today record:', error);
@@ -358,13 +346,8 @@ export default function IndividualDetailScreen() {
     if (!result.canceled && result.assets.length > 0) {
       const asset = result.assets[0];
       const timestamp = getImageCreationTime(asset);
-      // 根据设置决定是否复制到应用目录
-      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
-      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
-      const permanentUri = copyImageToApp
-        ? await copyImageToDocumentDirectory(asset.uri)
-        : asset.uri;
-      await saveNewImages([permanentUri], timestamp);
+      // 直接使用原始 URI，不复制到应用目录
+      await saveNewImages([asset.uri], timestamp);
     }
   };
 
@@ -382,13 +365,14 @@ export default function IndividualDetailScreen() {
     });
 
     if (!result.canceled && result.assets.length > 0) {
-      // 如果开启隐藏已添加，则过滤掉已存在的 assetId
+      // 如果开启隐藏已添加，则过滤掉已存在的 URI
       let assetsToAdd = result.assets;
       let skippedCount = 0;
-      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+      if (hideAlreadyAdded && existingUris.length > 0) {
         const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
         for (const asset of result.assets) {
-          if (asset.assetId && existingAssetIds.includes(asset.assetId)) {
+          // 使用 URI 判断是否已添加
+          if (existingUris.includes(asset.uri)) {
             skippedCount++;
           } else {
             filteredAssets.push(asset);
@@ -404,54 +388,26 @@ export default function IndividualDetailScreen() {
         }
       }
 
-      // 根据设置决定是否复制图片
-      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
-      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
-
-      // 按日期分组图片，同时收集 assetId
-      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      // 按日期分组图片，同时收集 URI
+      const imagesByDate = new Map<number, { uris: string[] }>();
 
       for (const asset of assetsToAdd) {
         const uri = asset.uri;
-        const assetId = asset.assetId || '';
-        // 如果不复制图片，直接使用 ImagePicker 返回的 creationTime（来自 EXIF），避免调用 getAssetInfoAsync
-        // 如果需要复制，则调用 getAssetInfoAsync 获取更准确的信息
-        let timestamp: number;
-        if (copyImageToApp) {
-          timestamp = await getImageCreationTimeFromUri(uri);
-        } else {
-          // 直接使用 ImagePicker 返回的 creationTime（来自 EXIF）
-          timestamp = asset.creationTime || Date.now();
-        }
+        // 直接使用 ImagePicker 返回的 creationTime（来自 EXIF），不调用 getAssetInfoAsync
+        const timestamp = (asset as any).creationTime || Date.now();
 
         // 找到该日期所在的分组键（使用日期戳的起始-of-day）
         const dayKey = getStartOfDay(timestamp);
 
         if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+          imagesByDate.set(dayKey, { uris: [] });
         }
         imagesByDate.get(dayKey)!.uris.push(uri);
-        imagesByDate.get(dayKey)!.assetIds.push(assetId);
       }
 
-      // 按日期分组并准备保存
-      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
-
+      // 保存图片（直接使用原始 URI，不复制）
       for (const [dayKey, data] of imagesByDate) {
-        let uris: string[];
-        if (copyImageToApp) {
-          // 复制到应用目录
-          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        } else {
-          // 直接使用原路径
-          uris = data.uris;
-        }
-        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
-      }
-
-      // 分别保存每个日期组的图片
-      for (const [dayKey, data] of imagesToSaveByDate) {
-        await saveNewImages(data.uris, dayKey, data.assetIds);
+        await saveNewImages(data.uris, dayKey);
       }
     }
   };
@@ -534,32 +490,6 @@ export default function IndividualDetailScreen() {
     return timestamp;
   };
 
-  // 从 URI 获取图片创建时间（尝试使用 MediaLibrary 获取完整信息）
-  const getImageCreationTimeFromUri = async (uri: string): Promise<number> => {
-    try {
-      // 尝试使用 MediaLibrary 获取资产的完整信息
-      const assetInfo = await MediaLibrary.getAssetInfoAsync(uri);
-      if (assetInfo && typeof assetInfo === 'object') {
-        const info = assetInfo as any;
-        // MediaLibrary 的 assetInfo 通常包含 creationTime
-        if (info.creationTime) {
-          const ct = info.creationTime;
-          const ctMs = ct < 1e12 ? ct * 1000 : ct;
-          const ctDate = new Date(ctMs);
-          // 验证是否是合理的时间
-          if (ctDate.getFullYear() >= 2000 && ctDate.getFullYear() <= 2100) {
-            return ctMs;
-          }
-        }
-      }
-    } catch (e) {
-      // MediaLibrary 可能无法访问该 URI，忽略错误
-    }
-
-    // 如果 MediaLibrary 失败，返回当前时间（兜底）
-    return Date.now();
-  };
-
   // 检查时间戳是否是同一天
   const isSameDay = (ts1: number, ts2: number): boolean => {
     const d1 = new Date(ts1);
@@ -616,7 +546,7 @@ export default function IndividualDetailScreen() {
       });
 
       setGalleryImages(assets.assets);
-      await loadExistingAssetIds();
+      await loadExistingUris();
       setShowCustomGallery(true);
       setGalleryLoading(false);
     } catch (error) {
@@ -658,12 +588,12 @@ export default function IndividualDetailScreen() {
     try {
       let assetsToAdd = assets;
 
-      // 如果是隐藏模式，过滤掉已添加的图片
-      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+      // 如果是隐藏模式，过滤掉已添加的图片（使用 URI 判断）
+      if (hideAlreadyAdded && existingUris.length > 0) {
         const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
         let skippedCount = 0;
         for (const asset of assets) {
-          if (asset.assetId && existingAssetIds.includes(asset.assetId)) {
+          if (existingUris.includes(asset.uri)) {
             skippedCount++;
           } else {
             filteredAssets.push(asset);
@@ -679,45 +609,23 @@ export default function IndividualDetailScreen() {
         }
       }
 
-      // 按日期分组图片，同时收集 assetId
-      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      // 按日期分组图片
+      const imagesByDate = new Map<number, { uris: string[] }>();
 
       for (const asset of assetsToAdd) {
         const uri = asset.uri;
-        const assetId = asset.assetId || '';
         const timestamp = getImageCreationTime(asset);
         const dayKey = getStartOfDay(timestamp);
 
         if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+          imagesByDate.set(dayKey, { uris: [] });
         }
         imagesByDate.get(dayKey)!.uris.push(uri);
-        imagesByDate.get(dayKey)!.assetIds.push(assetId);
       }
 
-      // 根据设置决定是复制图片还是使用原URI
-      // 直接从 AsyncStorage 读取设置，确保获取最新值
-      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
-      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
-
-      // 按日期分组并准备保存
-      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
-
+      // 保存图片（直接使用原始 URI，不复制）
       for (const [dayKey, data] of imagesByDate) {
-        let uris: string[];
-        if (copyImageToApp) {
-          // 复制到应用目录
-          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        } else {
-          // 直接使用原路径
-          uris = data.uris;
-        }
-        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
-      }
-
-      // 分别保存每个日期组的图片
-      for (const [dayKey, data] of imagesToSaveByDate) {
-        await saveNewImages(data.uris, dayKey, data.assetIds);
+        await saveNewImages(data.uris, dayKey);
       }
     } catch (error) {
       console.error('Failed to process picker assets:', error);
@@ -761,11 +669,12 @@ export default function IndividualDetailScreen() {
       // 获取选中的图片资源
       let selectedAssets = galleryImages.filter(img => img.id && gallerySelectedIds.includes(img.id));
 
-      // 如果是隐藏模式，过滤掉已添加的图片
-      if (hideAlreadyAdded && existingAssetIds.length > 0) {
+      // 如果是隐藏模式，过滤掉已添加的图片（使用 URI 判断）
+      if (hideAlreadyAdded && existingUris.length > 0) {
         const beforeCount = selectedAssets.length;
         selectedAssets = selectedAssets.filter(img => {
-          if (img.id && existingAssetIds.includes(img.id)) {
+          // 使用 URI 判断是否已添加
+          if (existingUris.includes(img.uri)) {
             return false;
           }
           return true;
@@ -786,66 +695,25 @@ export default function IndividualDetailScreen() {
         return;
       }
 
-      // 获取每个图片的 URI
-      // 当 copyImageToApp = false 时，直接使用原始 URI，不调用 getAssetInfoAsync（避免系统创建本地缓存）
-      const savedCopySetting = await AsyncStorage.getItem('copyImageToApp');
-      const copyImageToApp = savedCopySetting !== null ? JSON.parse(savedCopySetting) : false;
-
-      const assetsWithUri: { uri: string; assetId: string; timestamp: number }[] = [];
-      for (const asset of selectedAssets) {
-        if (copyImageToApp) {
-          // 需要复制到应用目录时，获取永久 URI
-          try {
-            const info = await MediaLibrary.getAssetInfoAsync(asset);
-            const permanentUri = typeof info === 'string' ? info : info.uri;
-            if (permanentUri) {
-              assetsWithUri.push({
-                uri: permanentUri,
-                assetId: asset.id || '',
-                timestamp: asset.creationTime || Date.now(),
-              });
-            }
-          } catch (error) {
-            console.error('Failed to get asset info:', error);
-          }
-        } else {
-          // 不复制时，直接使用原始 URI
-          assetsWithUri.push({
-            uri: asset.uri,
-            assetId: asset.id || '',
-            timestamp: asset.creationTime || Date.now(),
-          });
-        }
-      }
+      // 直接使用原始 URI，不调用 getAssetInfoAsync
+      const assetsWithUri: { uri: string; timestamp: number }[] = selectedAssets.map(asset => ({
+        uri: asset.uri,
+        timestamp: asset.creationTime || Date.now(),
+      }));
 
       // 按日期分组
-      const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      const imagesByDate = new Map<number, { uris: string[] }>();
       for (const img of assetsWithUri) {
         const dayKey = getStartOfDay(img.timestamp);
         if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+          imagesByDate.set(dayKey, { uris: [] });
         }
         imagesByDate.get(dayKey)!.uris.push(img.uri);
-        imagesByDate.get(dayKey)!.assetIds.push(img.assetId);
       }
 
-      // 按日期分组并准备保存
-      const imagesToSaveByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+      // 保存图片（直接使用原始 URI，不复制）
       for (const [dayKey, data] of imagesByDate) {
-        let uris: string[];
-        if (copyImageToApp) {
-          // 复制到应用目录
-          uris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
-        } else {
-          // 直接使用原路径
-          uris = data.uris;
-        }
-        imagesToSaveByDate.set(dayKey, { uris, assetIds: data.assetIds });
-      }
-
-      // 分别保存每个日期组的图片
-      for (const [dayKey, data] of imagesToSaveByDate) {
-        await saveNewImages(data.uris, dayKey, data.assetIds);
+        await saveNewImages(data.uris, dayKey);
       }
 
       setShowCustomGallery(false);
@@ -865,7 +733,7 @@ export default function IndividualDetailScreen() {
   };
 
   // 保存新图片到记录
-  const saveNewImages = async (uris: string[], timestamp: number, assetIds: string[] = []) => {
+  const saveNewImages = async (uris: string[], timestamp: number) => {
     if (uris.length === 0) return;
 
     try {
@@ -878,12 +746,8 @@ export default function IndividualDetailScreen() {
         const existingPaths: string[] = Array.isArray(existingRecord.imagePath)
           ? existingRecord.imagePath
           : existingRecord.imagePath ? [existingRecord.imagePath] : [];
-        const existingAssetIdList: string[] = Array.isArray(existingRecord.imageAssetIds)
-          ? existingRecord.imageAssetIds
-          : existingRecord.imageAssetIds ? [existingRecord.imageAssetIds] : [];
         const newPaths = [...existingPaths, ...uris];
-        const newAssetIds = [...existingAssetIdList, ...assetIds];
-        await RecordRepository.update(existingRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
+        await RecordRepository.update(existingRecord.id, { imagePath: newPaths });
       } else {
         // 没有相同日期的记录：创建新记录
         const imageDate = new Date(timestamp);
@@ -891,7 +755,6 @@ export default function IndividualDetailScreen() {
         await RecordRepository.create({
           individualId,
           imagePath: uris,
-          imageAssetIds: assetIds,
           title: `${dateStr} 记录`,
           description: '',
           recordDate: timestamp,
@@ -968,20 +831,14 @@ export default function IndividualDetailScreen() {
       const currentPaths: string[] = Array.isArray(currentRecord.imagePath)
         ? currentRecord.imagePath
         : currentRecord.imagePath ? [currentRecord.imagePath] : [];
-      const currentAssetIds: string[] = Array.isArray(currentRecord.imageAssetIds)
-        ? currentRecord.imageAssetIds
-        : currentRecord.imageAssetIds ? [currentRecord.imageAssetIds] : [];
       const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
-      const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
-      // 获取要移动的图片对应的 assetId
-      const movingAssetId = currentAssetIds[selectedImageInfo.imageIndex] || '';
 
       if (updatedPaths.length === 0) {
         // 如果没有图片了，删除整条记录
         await RecordRepository.delete(selectedImageInfo.recordId);
       } else {
         // 否则更新记录
-        await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
+        await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths });
       }
 
       // 查找目标日期是否有记录
@@ -994,12 +851,8 @@ export default function IndividualDetailScreen() {
           const existingPaths: string[] = Array.isArray(record.imagePath)
             ? record.imagePath
             : record.imagePath ? [record.imagePath] : [];
-          const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
-            ? record.imageAssetIds
-            : record.imageAssetIds ? [record.imageAssetIds] : [];
           const newPaths = [...existingPaths, selectedImageInfo.imagePath];
-          const newAssetIds = [...existingAssetIds, movingAssetId];
-          await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
+          await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
         }
       } else {
         // 创建新记录
@@ -1007,7 +860,6 @@ export default function IndividualDetailScreen() {
         await RecordRepository.create({
           individualId,
           imagePath: [selectedImageInfo.imagePath],
-          imageAssetIds: [movingAssetId],
           title: `${dateStr} 记录`,
           description: '',
           recordDate: newTimestamp,
@@ -1046,28 +898,16 @@ export default function IndividualDetailScreen() {
               const currentPaths: string[] = Array.isArray(currentRecord.imagePath)
                 ? currentRecord.imagePath
                 : currentRecord.imagePath ? [currentRecord.imagePath] : [];
-              const currentAssetIds: string[] = Array.isArray(currentRecord.imageAssetIds)
-                ? currentRecord.imageAssetIds
-                : currentRecord.imageAssetIds ? [currentRecord.imageAssetIds] : [];
-
-              // 获取要删除的图片路径
-              const imagePathToDelete = currentPaths[selectedImageInfo.imageIndex];
 
               // 移除指定索引的图片
               const updatedPaths = currentPaths.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
-              const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== selectedImageInfo.imageIndex);
-
-              // 如果是本地文件（documents/images/），删除实际文件
-              if (imagePathToDelete && imagePathToDelete.startsWith(getImageDirectoryPath())) {
-                await deleteImage(imagePathToDelete);
-              }
 
               if (updatedPaths.length === 0) {
                 // 如果没有图片了，删除整条记录
                 await RecordRepository.delete(selectedImageInfo.recordId);
               } else {
-                // 否则更新记录，移除该图片和对应的 assetId
-                await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
+                // 否则更新记录
+                await RecordRepository.update(selectedImageInfo.recordId, { imagePath: updatedPaths });
               }
 
               closeLongPressMenu();
@@ -1299,7 +1139,6 @@ export default function IndividualDetailScreen() {
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingAssetIds={existingAssetIds}
         existingUris={existingUris}
         hideAlreadyAdded={hideAlreadyAdded}
         loading={galleryLoading}

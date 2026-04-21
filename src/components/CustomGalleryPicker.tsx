@@ -20,7 +20,6 @@ interface CustomGalleryPickerProps {
   visible: boolean;
   images: MediaLibrary.Asset[];
   selectedIds: string[];
-  existingAssetIds: string[];
   existingUris: string[];
   hideAlreadyAdded: boolean;
   loading: boolean;
@@ -38,18 +37,13 @@ interface GallerySection {
 }
 
 // 将图片按日期分组
-function groupImagesByDate(images: MediaLibrary.Asset[], existingAssetIds: string[] = [], existingUris: string[] = [], hideAlreadyAdded: boolean = false): GallerySection[] {
-  // 如果开启隐藏，则过滤掉已添加的图片
-  // 同时用 assetId 和 URI 判断，URI 判断更准确
-  const filteredImages = hideAlreadyAdded && (existingAssetIds.length > 0 || existingUris.length > 0)
+function groupImagesByDate(images: MediaLibrary.Asset[], existingUris: string[] = [], hideAlreadyAdded: boolean = false): GallerySection[] {
+  // 如果开启隐藏，则过滤掉已添加的图片（使用 URI 判断）
+  const filteredImages = hideAlreadyAdded && existingUris.length > 0
     ? images.filter(img => {
-        // 先用 URI 判断（更准确）
         const imgUri = img.uri;
-        const isAlreadyAddedByUri = existingUris.some(uri => uri === imgUri || imgUri.includes(uri) || uri.includes(imgUri));
-        if (isAlreadyAddedByUri) return false;
-        // 再用 assetId 判断（备用）
-        if (img.id && existingAssetIds.includes(img.id)) return false;
-        return true;
+        // 判断是否已添加（精确匹配 URI）
+        return !existingUris.includes(imgUri);
       })
     : images;
 
@@ -137,7 +131,6 @@ export function CustomGalleryPicker({
   visible,
   images,
   selectedIds,
-  existingAssetIds,
   existingUris,
   hideAlreadyAdded,
   loading,
@@ -151,7 +144,7 @@ export function CustomGalleryPicker({
   const insets = useSafeAreaInsets();
 
   // 按日期分组
-  const sections = useMemo(() => groupImagesByDate(images, existingAssetIds, existingUris, hideAlreadyAdded), [images, existingAssetIds, existingUris, hideAlreadyAdded]);
+  const sections = useMemo(() => groupImagesByDate(images, existingUris, hideAlreadyAdded), [images, existingUris, hideAlreadyAdded]);
 
   // 处理长按选择
   const handleLongPress = useCallback((asset: MediaLibrary.Asset) => {
@@ -211,7 +204,7 @@ export function CustomGalleryPicker({
                 <View style={styles.grid}>
                   {section.data.map((item) => {
                     const isSelected = item.id ? selectedIds.includes(item.id) : false;
-                    const isAlreadyAdded = item.id ? existingAssetIds.includes(item.id) : false;
+                    const isAlreadyAdded = existingUris.includes(item.uri);
                     const isDisabled = hideAlreadyAdded && isAlreadyAdded;
 
                     return (

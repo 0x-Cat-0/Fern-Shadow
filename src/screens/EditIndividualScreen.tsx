@@ -22,7 +22,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import type { RootStackParamList, Group, Individual, Record as RecordType } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditIndividual'>;
@@ -190,29 +189,27 @@ export default function EditIndividualScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        // 按日期分组图片，同时收集 assetId
-        const imagesByDate = new Map<number, { uris: string[]; assetIds: string[] }>();
+        // 按日期分组图片
+        const imagesByDate = new Map<number, { uris: string[] }>();
 
         for (const asset of result.assets) {
           const uri = asset.uri;
-          const assetId = asset.assetId || '';
           const timestamp = getImageCreationTime(asset);
           const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
 
           if (!imagesByDate.has(dayKey)) {
-            imagesByDate.set(dayKey, { uris: [], assetIds: [] });
+            imagesByDate.set(dayKey, { uris: [] });
           }
           imagesByDate.get(dayKey)!.uris.push(uri);
-          imagesByDate.get(dayKey)!.assetIds.push(assetId);
         }
 
         // 获取当前所有记录
         const currentRecords = await RecordRepository.findByIndividualId(individualId);
 
-        // 分别保存每个日期组的图片
+        // 分别保存每个日期组的图片（直接使用原始 URI，不复制）
         for (const [dayKey, data] of imagesByDate) {
-          // 始终复制到文档目录以保证可靠性
-          const permanentUris = await Promise.all(data.uris.map(uri => copyImageToDocumentDirectory(uri)));
+          // 直接使用原始 URI
+          const uris = data.uris;
 
           // 查找目标日期是否有记录
           const targetRecord = currentRecords.find(r => isSameDay(r.recordDate, dayKey));
@@ -224,12 +221,8 @@ export default function EditIndividualScreen() {
               const existingPaths: string[] = Array.isArray(record.imagePath)
                 ? record.imagePath
                 : record.imagePath ? [record.imagePath] : [];
-              const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
-                ? record.imageAssetIds
-                : record.imageAssetIds ? [record.imageAssetIds] : [];
-              const newPaths = [...existingPaths, ...permanentUris];
-              const newAssetIds = [...existingAssetIds, ...data.assetIds];
-              await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
+              const newPaths = [...existingPaths, ...uris];
+              await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
             }
           } else {
             // 创建新记录
@@ -237,8 +230,7 @@ export default function EditIndividualScreen() {
             const dateStr = `${String(imageDate.getMonth() + 1).padStart(2, '0')}.${String(imageDate.getDate()).padStart(2, '0')}`;
             await RecordRepository.create({
               individualId,
-              imagePath: permanentUris,
-              imageAssetIds: data.assetIds,
+              imagePath: data.uris,
               title: `${dateStr} 记录`,
               description: '',
               recordDate: dayKey,
@@ -272,9 +264,8 @@ export default function EditIndividualScreen() {
         const asset = result.assets[0];
         const timestamp = getImageCreationTime(asset);
         const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
-        const assetId = asset.assetId || '';
-        // 始终复制到文档目录以保证可靠性
-        const permanentUri = await copyImageToDocumentDirectory(asset.uri);
+        // 直接使用原始 URI，不复制到应用目录
+        const uri = asset.uri;
 
         // 获取当前所有记录
         const currentRecords = await RecordRepository.findByIndividualId(individualId);
@@ -289,12 +280,8 @@ export default function EditIndividualScreen() {
             const existingPaths: string[] = Array.isArray(record.imagePath)
               ? record.imagePath
               : record.imagePath ? [record.imagePath] : [];
-            const existingAssetIds: string[] = Array.isArray(record.imageAssetIds)
-              ? record.imageAssetIds
-              : record.imageAssetIds ? [record.imageAssetIds] : [];
-            const newPaths = [...existingPaths, permanentUri];
-            const newAssetIds = [...existingAssetIds, assetId];
-            await RecordRepository.update(targetRecord.id, { imagePath: newPaths, imageAssetIds: newAssetIds });
+            const newPaths = [...existingPaths, uri];
+            await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
           }
         } else {
           // 创建新记录
@@ -302,8 +289,7 @@ export default function EditIndividualScreen() {
           const dateStr = `${String(imageDate.getMonth() + 1).padStart(2, '0')}.${String(imageDate.getDate()).padStart(2, '0')}`;
           await RecordRepository.create({
             individualId,
-            imagePath: [permanentUri],
-            imageAssetIds: [assetId],
+            imagePath: [uri],
             title: `${dateStr} 记录`,
             description: '',
             recordDate: dayKey,
@@ -337,16 +323,12 @@ export default function EditIndividualScreen() {
                 const currentPaths: string[] = Array.isArray(record.imagePath)
                   ? record.imagePath
                   : record.imagePath ? [record.imagePath] : [];
-                const currentAssetIds: string[] = Array.isArray(record.imageAssetIds)
-                  ? record.imageAssetIds
-                  : record.imageAssetIds ? [record.imageAssetIds] : [];
                 const updatedPaths = currentPaths.filter((_, idx) => idx !== index);
-                const updatedAssetIds = currentAssetIds.filter((_, idx) => idx !== index);
 
                 if (updatedPaths.length === 0) {
                   await RecordRepository.delete(recordImage.recordId);
                 } else {
-                  await RecordRepository.update(recordImage.recordId, { imagePath: updatedPaths, imageAssetIds: updatedAssetIds });
+                  await RecordRepository.update(recordImage.recordId, { imagePath: updatedPaths });
                 }
               }
 

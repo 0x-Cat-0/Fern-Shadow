@@ -21,7 +21,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { GroupRepository, IndividualRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import type { RootStackParamList, Individual } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateGroup'>;
@@ -138,15 +137,12 @@ export default function CreateGroupScreen() {
 
     setSaving(true);
     try {
-      // 始终复制到文档目录以保证可靠性
-      let permanentUri: string | undefined;
-      if (coverImagePath) {
-        permanentUri = await copyImageToDocumentDirectory(coverImagePath);
-      }
+      // 直接使用原始 URI，不复制到应用目录
+      const coverUri = coverImagePath || '';
 
       // 创建分组并获取新分组ID
       const newGroupId = await GroupRepository.create({
-        coverImagePath: permanentUri || '',
+        coverImagePath: coverUri,
         title: title.trim(),
         description: description.trim(),
       });

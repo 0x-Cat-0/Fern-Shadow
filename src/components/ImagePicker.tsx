@@ -13,8 +13,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../hooks/useTheme';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
-import { useSettingsStore } from '../store/settingsStore';
 
 interface ImagePickerButtonProps {
   imagePath?: string;
@@ -71,17 +69,8 @@ export function ImagePickerButton({
           });
 
     if (!result.canceled && result.assets[0]) {
-      const originalUri = result.assets[0].uri;
-      const copyImageToApp = useSettingsStore.getState().copyImageToApp;
-
-      if (copyImageToApp) {
-        // 复制到应用目录
-        const savedPath = await copyImageToDocumentDirectory(originalUri);
-        onImageSelected(savedPath);
-      } else {
-        // 直接使用原路径
-        onImageSelected(originalUri);
-      }
+      // 直接使用原始 URI，不复制到应用目录
+      onImageSelected(result.assets[0].uri);
     }
   };
 

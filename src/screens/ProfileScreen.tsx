@@ -4,12 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, GroupRepository, RecordRepository } from '../database/repositories';
-import { getFileSize, formatFileSize } from '../utils/StorageUtils';
 
 interface Props {
   onHelpPress: () => void;
   onAboutPress: () => void;
-  onStoragePress: () => void;
 }
 
 interface Stats {
@@ -19,7 +17,7 @@ interface Stats {
   totalImages: number;
 }
 
-export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePress }: Props) {
+export default function ProfileScreen({ onHelpPress, onAboutPress }: Props) {
   const colors = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -29,7 +27,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
     recordCount: 0,
     totalImages: 0,
   });
-  const [storageSize, setStorageSize] = useState(0);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   useEffect(() => {
@@ -43,7 +40,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
 
         let recordCount = 0;
         let totalImages = 0;
-        let totalSize = 0;
 
         for (const individual of individuals) {
           const count = await RecordRepository.getCountByIndividualId(individual.id);
@@ -55,11 +51,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
               ? record.imagePath
               : record.imagePath ? [record.imagePath] : [];
             totalImages += paths.length;
-
-            // 计算每个文件的大小
-            for (const path of paths) {
-              totalSize += await getFileSize(path);
-            }
           }
         }
 
@@ -69,7 +60,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
           recordCount,
           totalImages,
         });
-        setStorageSize(totalSize);
       } catch (error) {
         console.error('Failed to load stats:', error);
       }
@@ -92,10 +82,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
 
   const handleAbout = () => {
     onAboutPress();
-  };
-
-  const handleStorage = () => {
-    onStoragePress();
   };
 
   return (
@@ -147,17 +133,6 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
           </View>
         </View>
 
-        {/* 存储空间 */}
-        <TouchableOpacity style={[styles.optionsCard, { backgroundColor: colors.surface }]} onPress={handleStorage}>
-          <View style={styles.optionItem}>
-            <Text style={[styles.optionText, { color: colors.textPrimary }]}>存储空间</Text>
-            <View style={styles.optionRight}>
-              <Text style={[styles.optionValue, { color: colors.textSecondary }]}>{formatFileSize(storageSize)}</Text>
-              <Text style={[styles.optionArrow, { color: colors.textDisabled }]}>›</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
         {/* 功能选项 */}
         <View style={[styles.optionsCard, { backgroundColor: colors.surface }]}>
           <TouchableOpacity style={styles.optionItem} onPress={handleHelp}>
@@ -182,7 +157,7 @@ export default function ProfileScreen({ onHelpPress, onAboutPress, onStoragePres
 
         {/* 版本信息 */}
         <View style={styles.versionSection}>
-          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.2.7</Text>
+          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.3.0</Text>
         </View>
       </ScrollView>
 

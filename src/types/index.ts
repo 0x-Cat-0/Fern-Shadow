@@ -22,7 +22,6 @@ export interface Record {
   id: number;
   individualId: number;
   imagePath: string | string[];
-  imageAssetIds: string | string[];  // 相册 assetId 列表
   title: string;
   description: string;
   recordDate: number;
@@ -37,8 +36,8 @@ export type UpdateGroupDto = Partial<Pick<Group, 'coverImagePath' | 'title' | 'd
 export type CreateIndividualDto = Pick<Individual, 'coverImagePath' | 'title' | 'description'> & { groupIds?: number[] };
 export type UpdateIndividualDto = Partial<Pick<Individual, 'coverImagePath' | 'title' | 'description'>>;
 
-export type CreateRecordDto = Pick<Record, 'individualId' | 'imagePath' | 'imageAssetIds' | 'title' | 'description' | 'recordDate'>;
-export type UpdateRecordDto = Partial<Pick<Record, 'imagePath' | 'imageAssetIds' | 'title' | 'description' | 'recordDate'>>;
+export type CreateRecordDto = Pick<Record, 'individualId' | 'imagePath' | 'title' | 'description' | 'recordDate'>;
+export type UpdateRecordDto = Partial<Pick<Record, 'imagePath' | 'title' | 'description' | 'recordDate'>>;
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 

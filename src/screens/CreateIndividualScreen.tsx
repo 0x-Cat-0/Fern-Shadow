@@ -21,7 +21,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
-import { copyImagesToDocumentDirectory } from '../utils/ImageStorage';
 import { spacing, layout } from '../theme/spacing';
 import { typography } from '../theme/typography';
 import type { RootStackParamList, Group } from '../types';
@@ -34,7 +33,6 @@ interface SelectedImage {
   width: number;
   height: number;
   creationTime: number | null;
-  permanentUri?: string;
 }
 
 export default function CreateIndividualScreen() {
@@ -253,19 +251,11 @@ export default function CreateIndividualScreen() {
 
     setSaving(true);
     try {
-      // 始终复制到文档目录以保证可靠性
-      const sourceUris = selectedImages.map(img => img.uri);
-      const permanentUris = await copyImagesToDocumentDirectory(sourceUris);
-
-      const imagesWithPermanentUri = selectedImages.map((img, index) => ({
-        ...img,
-        permanentUri: permanentUris[index],
-      }));
-
-      const imageGroups = groupImagesByDate(imagesWithPermanentUri);
+      // 直接使用原始 URI，不复制到应用目录
+      const imageGroups = groupImagesByDate(selectedImages);
 
       const individualId = await IndividualRepository.create({
-        coverImagePath: imagesWithPermanentUri[0]?.permanentUri || '',
+        coverImagePath: selectedImages[0]?.uri || '',
         title: title.trim(),
         description: description.trim(),
         groupIds,
@@ -289,8 +279,7 @@ export default function CreateIndividualScreen() {
 
         await RecordRepository.create({
           individualId,
-          imagePath: images.map(img => img.permanentUri).filter((uri): uri is string => uri !== undefined),
-          imageAssetIds: [],
+          imagePath: images.map(img => img.uri),
           title: titleForRecord,
           description: defaultDesc,
           recordDate,

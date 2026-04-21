@@ -112,16 +112,30 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
       console.log('Migration: created idx_individuals_viewCount index');
     }
 
-    // 检查 records 表是否有 imageAssetIds 列
+    // 检查 records 表是否有 imageAssetIds 列，如有则移除
     const recordColumns = await database.getAllAsync<{ name: string }>(
       `PRAGMA table_info(\`records\`)`
     );
     const hasImageAssetIds = recordColumns.some(col => col.name === 'imageAssetIds');
-    if (!hasImageAssetIds) {
-      await database.runAsync(
-        `ALTER TABLE \`records\` ADD COLUMN imageAssetIds TEXT NOT NULL DEFAULT '[]'`
-      );
-      console.log('Migration: added imageAssetIds column to records table');
+    if (hasImageAssetIds) {
+      // SQLite 不支持 DROP COLUMN，通过重建表移除列
+      await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS records_new (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          individualId  INTEGER NOT NULL,
+          imagePath     TEXT NOT NULL DEFAULT '[]',
+          title         TEXT NOT NULL,
+          description   TEXT DEFAULT '',
+          recordDate    INTEGER NOT NULL,
+          createdAt     INTEGER NOT NULL,
+          FOREIGN KEY (individualId) REFERENCES individuals(id) ON DELETE CASCADE
+        );
+        INSERT INTO records_new (id, individualId, imagePath, title, description, recordDate, createdAt)
+          SELECT id, individualId, imagePath, title, description, recordDate, createdAt FROM records;
+        DROP TABLE records;
+        ALTER TABLE records_new RENAME TO records;
+      `);
+      console.log('Migration: removed imageAssetIds column from records table');
     }
   } catch (error) {
     console.error('Migration failed:', error);

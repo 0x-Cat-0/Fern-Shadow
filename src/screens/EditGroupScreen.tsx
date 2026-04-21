@@ -22,7 +22,6 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { useTheme } from '../hooks/useTheme';
 import { GroupRepository, IndividualRepository } from '../database/repositories';
-import { copyImageToDocumentDirectory } from '../utils/ImageStorage';
 import type { RootStackParamList, Individual, Group } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditGroup'>;
@@ -152,13 +151,11 @@ export default function EditGroupScreen() {
 
     setSaving(true);
     try {
-      // 始终复制到文档目录以保证可靠性
-      const permanentUri = coverImagePath
-        ? await copyImageToDocumentDirectory(coverImagePath)
-        : '';
+      // 直接使用原始 URI，不复制到应用目录
+      const coverUri = coverImagePath || '';
 
       await GroupRepository.update(groupId, {
-        coverImagePath: permanentUri,
+        coverImagePath: coverUri,
         title: title.trim(),
         description: description.trim(),
       });
