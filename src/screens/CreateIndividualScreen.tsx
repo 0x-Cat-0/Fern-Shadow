@@ -44,6 +44,7 @@ export default function CreateIndividualScreen() {
   const imageSource = route.params?.imageSource;
 
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [allExistingUris, setAllExistingUris] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [groupIds, setGroupIds] = useState<number[]>([]);
@@ -206,6 +207,10 @@ export default function CreateIndividualScreen() {
         setGalleryLoading(false);
         return;
       }
+
+      // 加载数据库中所有已存在的图片 URI
+      const allUris = await RecordRepository.getAllImageUris();
+      setAllExistingUris(allUris);
 
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
@@ -495,7 +500,10 @@ export default function CreateIndividualScreen() {
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingUris={selectedImages.map(img => img.uri)}
+        existingUris={[
+          ...allExistingUris,
+          ...selectedImages.map(img => img.uri),
+        ]}
         loading={galleryLoading}
         hasMore={galleryHasMore}
         onLoadMore={loadMoreGalleryImages}

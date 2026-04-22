@@ -7,7 +7,6 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
-  FlatList,
   ScrollView,
   Dimensions,
   Switch,
@@ -76,7 +75,7 @@ function GalleryImageItem({
       <TouchableOpacity
         style={[
           styles.checkbox,
-          showBlueCheck ? { backgroundColor: colors.primary } :
+          showBlueCheck ? { backgroundColor: '#2196F3' } :
           showGrayCheck ? { backgroundColor: '#888888' } : { backgroundColor: 'rgba(255,255,255,0.85)' },
           !isSelected && { borderColor: '#ddd', borderWidth: 2 },
         ]}
@@ -167,69 +166,6 @@ export function CustomGalleryPicker({
     return normalizedExisting.includes(normalizedUri);
   }, [normalizedExisting]);
 
-  // 格式化日期为显示字符串
-  const formatDateHeader = (timestamp: number): string => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-    const imageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-    if (imageDate.getTime() === today.getTime()) {
-      return '今天';
-    } else if (imageDate.getTime() === yesterday.getTime()) {
-      return '昨天';
-    } else {
-      return `${date.getMonth() + 1}月${date.getDate()}日`;
-    }
-  };
-
-  // 按日期分组
-  const groupedImages = useMemo(() => {
-    const groups: { date: string; timestamp: number; data: MediaLibrary.Asset[] }[] = [];
-    let currentGroup: { date: string; timestamp: number; data: MediaLibrary.Asset[] } | null = null;
-
-    for (const img of images) {
-      const timestamp = img.creationTime || Date.now();
-      const dateKey = formatDateHeader(timestamp);
-
-      if (!currentGroup || currentGroup.date !== dateKey) {
-        if (currentGroup && currentGroup.data.length > 0) {
-          groups.push(currentGroup);
-        }
-        currentGroup = { date: dateKey, timestamp, data: [img] };
-      } else {
-        currentGroup.data.push(img);
-      }
-    }
-    if (currentGroup && currentGroup.data.length > 0) {
-      groups.push(currentGroup);
-    }
-    return groups;
-  }, [images]);
-
-  // 展平为可渲染的列表项
-  type ListItem =
-    | { type: 'header'; date: string; dateTimestamp: number }
-    | { type: 'image'; item: MediaLibrary.Asset; sectionIndex: number; indexInSection: number; sectionLength: number };
-
-  const flatListData = useMemo((): ListItem[] => {
-    const result: ListItem[] = [];
-    groupedImages.forEach((group, sectionIndex) => {
-      result.push({ type: 'header', date: group.date, dateTimestamp: group.timestamp });
-      group.data.forEach((item, indexInSection) => {
-        result.push({
-          type: 'image',
-          item,
-          sectionIndex,
-          indexInSection,
-          sectionLength: group.data.length,
-        });
-      });
-    });
-    return result;
-  }, [groupedImages]);
-
   const handleConfirm = useCallback(() => {
     if (selectedIds.length === 0) return;
     const selected = images.filter(img => img.id && selectedIds.includes(img.id));
@@ -255,49 +191,6 @@ export function CustomGalleryPicker({
     setPreviewIndex(null);
   }, []);
 
-  const flatListRef = useRef<FlatList>(null);
-
-  // 计算初始渲染数量
-  const headerHeight = 56;
-  const bottomBarHeight = 60;
-
-  // 渲染列表项（日期头或图片）
-  const renderListItem = useCallback(({ item, index }: { item: ListItem; index: number }) => {
-    if (item.type === 'header') {
-      return (
-        <View style={styles.dateHeader}>
-          <Text style={styles.dateHeaderText}>{item.date}</Text>
-        </View>
-      );
-    }
-
-    const { item: img, sectionIndex, indexInSection, sectionLength } = item;
-    const isSelected = img.id ? selectedIds.includes(img.id) : false;
-    const isAlreadyAdded = checkIsAlreadyAdded(img.uri);
-
-    // 计算在 images 中的全局索引
-    const globalIndex = images.indexOf(img);
-
-    return (
-      <GalleryImageItem
-        item={img}
-        isSelected={isSelected}
-        isAlreadyAdded={isAlreadyAdded}
-        onImagePress={() => handleImagePress(globalIndex)}
-        onCheckboxPress={() => handleCheckboxPress(img)}
-        onLongPress={() => handleLongPress(img)}
-        colors={colors}
-      />
-    );
-  }, [selectedIds, checkIsAlreadyAdded, images, handleImagePress, handleCheckboxPress, handleLongPress, colors]);
-
-  const keyExtractor = useCallback((item: ListItem, index: number) => {
-    if (item.type === 'header') {
-      return `header-${item.dateTimestamp}`;
-    }
-    return item.item.id || String(item.item.uri);
-  }, []);
-
   const handleEndReached = useCallback(() => {
     if (!loading && hasMore) {
       onLoadMore();
@@ -315,6 +208,101 @@ export function CustomGalleryPicker({
         )}
       </TouchableOpacity>
     );
+  };
+
+  // 格式化日期为显示字符串
+  const formatDateHeader = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const imageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    if (imageDate.getTime() === today.getTime()) {
+      return '今天';
+    } else if (imageDate.getTime() === yesterday.getTime()) {
+      return '昨天';
+    } else {
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+  };
+
+  // 按日期分组 - 考虑 hideAlreadyAdded 过滤
+  const groupedImages = useMemo(() => {
+    // 先过滤
+    let filtered = images;
+    if (hideAlreadyAdded) {
+      filtered = images.filter(img => !checkIsAlreadyAdded(img.uri));
+    }
+
+    const groups: { date: string; timestamp: number; data: MediaLibrary.Asset[] }[] = [];
+    let currentGroup: { date: string; timestamp: number; data: MediaLibrary.Asset[] } | null = null;
+
+    for (const img of filtered) {
+      const timestamp = img.creationTime || Date.now();
+      const dateKey = formatDateHeader(timestamp);
+
+      if (!currentGroup || currentGroup.date !== dateKey) {
+        if (currentGroup && currentGroup.data.length > 0) {
+          groups.push(currentGroup);
+        }
+        currentGroup = { date: dateKey, timestamp, data: [img] };
+      } else {
+        currentGroup.data.push(img);
+      }
+    }
+    if (currentGroup && currentGroup.data.length > 0) {
+      groups.push(currentGroup);
+    }
+    return groups;
+  }, [images, hideAlreadyAdded, checkIsAlreadyAdded]);
+
+  // 渲染一行图片网格（最多4列）
+  const renderImageRow = (rowImages: MediaLibrary.Asset[], rowIndex: number, sectionIndex: number) => {
+    return (
+      <View key={`row-${sectionIndex}-${rowIndex}`} style={styles.gridRow}>
+        {rowImages.map((img, idx) => {
+          const isSelected = img.id ? selectedIds.includes(img.id) : false;
+          const isAlreadyAdded = checkIsAlreadyAdded(img.uri);
+          const globalIndex = images.indexOf(img);
+
+          return (
+            <GalleryImageItem
+              key={img.id || String(img.uri) + idx}
+              item={img}
+              isSelected={isSelected}
+              isAlreadyAdded={isAlreadyAdded}
+              onImagePress={() => handleImagePress(globalIndex)}
+              onCheckboxPress={() => handleCheckboxPress(img)}
+              onLongPress={() => handleLongPress(img)}
+              colors={colors}
+            />
+          );
+        })}
+        {/* 填充空白 */}
+        {Array.from({ length: NUM_COLUMNS - rowImages.length }).map((_, idx) => (
+          <View key={`empty-${idx}`} style={styles.gridItem} />
+        ))}
+      </View>
+    );
+  };
+
+  // 渲染整个分组列表
+  const renderGroupedList = () => {
+    return groupedImages.map((group, sectionIndex) => (
+      <View key={`section-${sectionIndex}`}>
+        <View style={styles.dateHeader}>
+          <Text style={styles.dateHeaderText}>{group.date}</Text>
+        </View>
+        <View style={styles.gridContent}>
+          {Array.from({ length: Math.ceil(group.data.length / NUM_COLUMNS) }).map((_, rowIndex) => {
+            const startIdx = rowIndex * NUM_COLUMNS;
+            const rowImages = group.data.slice(startIdx, startIdx + NUM_COLUMNS);
+            return renderImageRow(rowImages, rowIndex, sectionIndex);
+          })}
+        </View>
+      </View>
+    ));
   };
 
   const currentPreviewItem = previewIndex !== null ? images[previewIndex] : null;
@@ -377,26 +365,25 @@ export function CustomGalleryPicker({
               <View style={styles.loading}>
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>
-            ) : flatListData.length === 0 ? (
+            ) : groupedImages.length === 0 ? (
               <View style={styles.empty}>
                 <Text style={{ color: colors.textSecondary }}>没有可选择的图片</Text>
               </View>
             ) : (
-              <FlatList
-                ref={flatListRef}
-                data={flatListData}
-                renderItem={renderListItem}
-                keyExtractor={keyExtractor}
-                contentContainerStyle={[styles.gridContent, { paddingBottom: 16 }]}
-                onEndReached={handleEndReached}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={renderFooter}
-                maxToRenderPerBatch={20}
-                windowSize={10}
-                removeClippedSubviews={false}
-                initialNumToRender={50}
+              <ScrollView
+                contentContainerStyle={{ paddingBottom: 16 }}
+                onScroll={(e) => {
+                  const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+                  if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 100) {
+                    handleEndReached();
+                  }
+                }}
+                scrollEventThrottle={100}
                 showsVerticalScrollIndicator={false}
-              />
+              >
+                {renderGroupedList()}
+                {renderFooter()}
+              </ScrollView>
             )}
           </View>
 
@@ -472,8 +459,8 @@ export function CustomGalleryPicker({
                 style={[
                   styles.previewCheckbox,
                   {
-                    backgroundColor: isCurrentSelected ? colors.primary : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.3)',
-                    borderColor: isCurrentSelected ? colors.primary : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.5)',
+                    backgroundColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.3)',
+                    borderColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.5)',
                   }
                 ]}
                 onPress={() => handleCheckboxPress(currentPreviewItem)}

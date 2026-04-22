@@ -58,6 +58,7 @@ export default function EditIndividualScreen() {
   const [showCustomGallery, setShowCustomGallery] = useState(false);
   const [galleryImages, setGalleryImages] = useState<MediaLibrary.Asset[]>([]);
   const [gallerySelectedIds, setGallerySelectedIds] = useState<string[]>([]);
+  const [allExistingUris, setAllExistingUris] = useState<string[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryHasMore, setGalleryHasMore] = useState(false);
   const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
@@ -187,6 +188,10 @@ export default function EditIndividualScreen() {
         setGalleryLoading(false);
         return;
       }
+
+      // 加载数据库中所有已存在的图片 URI
+      const allUris = await RecordRepository.getAllImageUris();
+      setAllExistingUris(allUris);
 
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
@@ -623,7 +628,10 @@ export default function EditIndividualScreen() {
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingUris={recordImages.map(img => img.imagePath)}
+        existingUris={[
+          ...allExistingUris,
+          ...recordImages.map(img => img.imagePath),
+        ]}
         loading={galleryLoading}
         hasMore={galleryHasMore}
         onLoadMore={loadMoreGalleryImages}

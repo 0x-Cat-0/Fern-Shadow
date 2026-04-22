@@ -115,4 +115,25 @@ export class RecordRepository {
     );
     return row?.count ?? 0;
   }
+
+  // 获取数据库中所有记录的图片 URI
+  static async getAllImageUris(): Promise<string[]> {
+    const db = getDatabase();
+    const rows = await db.getAllAsync<{ imagePath: string }>(
+      `SELECT imagePath FROM \`records\``
+    );
+    const allUris: string[] = [];
+    for (const row of rows) {
+      try {
+        const paths: string[] = JSON.parse(row.imagePath as unknown as string);
+        allUris.push(...paths);
+      } catch {
+        // 如果不是 JSON 格式，可能是单个路径
+        if (row.imagePath) {
+          allUris.push(row.imagePath as unknown as string);
+        }
+      }
+    }
+    return allUris;
+  }
 }

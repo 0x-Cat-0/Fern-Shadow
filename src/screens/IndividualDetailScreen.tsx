@@ -167,22 +167,16 @@ export default function IndividualDetailScreen() {
     }
   }, [individualId]);
 
-  // 获取该植物所有已添加图片的 URI 列表（用于相册中判断是否已添加）
+  // 获取数据库中所有已添加图片的 URI 列表（用于相册中判断是否已添加）
   const loadExistingUris = useCallback(async () => {
     try {
-      const recordsData = await RecordRepository.findByIndividualId(individualId);
-      const allUris: string[] = [];
-      for (const record of recordsData) {
-        const uris: string[] = Array.isArray(record.imagePath)
-          ? record.imagePath
-          : record.imagePath ? [record.imagePath] : [];
-        allUris.push(...uris);
-      }
+      // 获取所有记录的图片 URI，而不是只获取当前植物的
+      const allUris = await RecordRepository.getAllImageUris();
       setExistingUris(allUris);
     } catch (error) {
       console.error('Failed to load existing URIs:', error);
     }
-  }, [individualId]);
+  }, []);
 
   // 是否有今天的记录
   const [hasTodayRecord, setHasTodayRecord] = useState(false);
