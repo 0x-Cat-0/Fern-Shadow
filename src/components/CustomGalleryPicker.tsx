@@ -82,7 +82,7 @@ function GalleryImageItem({
         onPress={onCheckboxPress}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        {(showBlueCheck || showGrayCheck) && <Text style={styles.checkmarkWhite}>✓</Text>}
+        <Text style={[styles.checkmarkWhite, { opacity: (showBlueCheck || showGrayCheck) ? 1 : 0 }]}>✓</Text>
       </TouchableOpacity>
     </View>
   );
@@ -229,10 +229,17 @@ export function CustomGalleryPicker({
 
   // 按日期分组 - 考虑 hideAlreadyAdded 过滤
   const groupedImages = useMemo(() => {
-    // 先过滤
+    // 先过滤：隐藏已添加的图片，但保留当前会话已选择的
     let filtered = images;
     if (hideAlreadyAdded) {
-      filtered = images.filter(img => !checkIsAlreadyAdded(img.uri));
+      filtered = images.filter(img => {
+        // 如果图片已选择（在当前会话中），保留显示
+        if (img.id && selectedIds.includes(img.id)) {
+          return true;
+        }
+        // 否则检查是否已在数据库中存在
+        return !checkIsAlreadyAdded(img.uri);
+      });
     }
 
     const groups: { date: string; timestamp: number; data: MediaLibrary.Asset[] }[] = [];
@@ -255,7 +262,7 @@ export function CustomGalleryPicker({
       groups.push(currentGroup);
     }
     return groups;
-  }, [images, hideAlreadyAdded, checkIsAlreadyAdded]);
+  }, [images, hideAlreadyAdded, checkIsAlreadyAdded, selectedIds]);
 
   // 渲染一行图片网格（最多4列）
   const renderImageRow = (rowImages: MediaLibrary.Asset[], rowIndex: number, sectionIndex: number) => {
@@ -465,7 +472,7 @@ export function CustomGalleryPicker({
                 ]}
                 onPress={() => handleCheckboxPress(currentPreviewItem)}
               >
-                {(isCurrentSelected || isAlreadyAddedForPreview) && <Text style={styles.previewCheckboxText}>✓</Text>}
+                                <Text style={[styles.previewCheckboxText, { opacity: (isCurrentSelected || isAlreadyAddedForPreview) ? 1 : 0 }]}>✓</Text>
               </TouchableOpacity>
             )}
           </View>
