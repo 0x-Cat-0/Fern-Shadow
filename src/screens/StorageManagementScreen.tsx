@@ -62,17 +62,16 @@ export default function StorageManagementScreen({ onClose }: Props) {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
-        {/* 缓存 */}
         <View style={[styles.overviewCard, { backgroundColor: colors.surface }]}>
           <View style={styles.overviewRow}>
-            <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>缓存大小</Text>
+            <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>临时缓存</Text>
             <Text style={[styles.overviewValue, { color: colors.textPrimary }]}>{formatFileSize(cacheSize)}</Text>
           </View>
           <TouchableOpacity
             style={[styles.clearCacheBtn, { backgroundColor: colors.primary + '15' }]}
             onPress={handleClearCache}
           >
-            <Text style={[styles.clearCacheText, { color: colors.primary }]}>清除缓存</Text>
+            <Text style={[styles.clearCacheText, { color: colors.primary }]}>清除临时缓存</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

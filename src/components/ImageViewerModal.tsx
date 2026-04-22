@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -60,9 +60,6 @@ export function ImageViewerModal({
             offset: screenWidth * index,
             index,
           })}
-          onMomentumScrollEnd={(e) => {
-            // Handle scroll end if needed
-          }}
           keyExtractor={(item, index) => `viewer-${index}`}
           renderItem={({ item: path }) => (
             <View style={[styles.imageViewerItem, { width: screenWidth }]}>

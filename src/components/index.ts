@@ -9,7 +9,6 @@ export { SideDrawer } from './SideDrawer';
 export { IndividualCard } from './IndividualCard';
 export { RecordTimelineItem } from './RecordTimelineItem';
 export { ImageViewerModal } from './ImageViewerModal';
-export { AddImageModal } from './AddImageModal';
 export { CustomGalleryPicker } from './CustomGalleryPicker';
 export { LongPressMenu } from './LongPressMenu';
 export { DatePickerModal } from './DatePickerModal';

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,10 @@ import {
   RefreshControl,
   Image,
   TouchableOpacity,
-  Dimensions,
   useWindowDimensions,
   Alert,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,12 +26,21 @@ import {
   IndividualCard,
   RecordTimelineItem,
   ImageViewerModal,
-  AddImageModal,
   CustomGalleryPicker,
   LongPressMenu,
   DatePickerModal,
   AddToGroupModal,
 } from '../components';
+
+// 标准化 URI：去除查询参数，只保留 content:// path 部分
+function normalizeUri(uri: string): string {
+  try {
+    const url = new URL(uri);
+    return url.origin + url.pathname;
+  } catch {
+    return uri;
+  }
+}
 
 export interface RecordItem {
   id: number;
@@ -79,13 +88,6 @@ export default function IndividualDetailScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   // 添加图片状态
-  const [showAddImageModal, setShowAddImageModal] = useState(false);
-  const [addImageRecordId, setAddImageRecordId] = useState<number | null>(null);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  // 使用系统相册（开关开启时使用系统相册，关闭时使用自定义相册）
-  const [useSystemAlbum, setUseSystemAlbum] = useState(false);
-  // 是否隐藏已添加的图片（开关开启时隐藏，关闭时显示但标记）- 仅在使用自定义相册时有效
-  const [hideAlreadyAdded, setHideAlreadyAdded] = useState(true);
   // 该植物已添加的图片 URI 列表（用于相册中判断是否已添加）
   const [existingUris, setExistingUris] = useState<string[]>([]);
 
@@ -94,6 +96,8 @@ export default function IndividualDetailScreen() {
   const [galleryImages, setGalleryImages] = useState<MediaLibrary.Asset[]>([]);
   const [gallerySelectedIds, setGallerySelectedIds] = useState<string[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryHasMore, setGalleryHasMore] = useState(false);
+  const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
 
   // 长按图片菜单状态
   const [showLongPressMenu, setShowLongPressMenu] = useState(false);
@@ -113,6 +117,10 @@ export default function IndividualDetailScreen() {
   const [showAddToGroupModal, setShowAddToGroupModal] = useState(false);
   const [availableGroups, setAvailableGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+
+  // 图片来源选择弹窗状态
+  const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+  const [pendingAddRecordId, setPendingAddRecordId] = useState<number | null>(null);
 
   const titleInputRef = useRef<TextInput>(null);
   const descInputRef = useRef<TextInput>(null);
@@ -257,23 +265,19 @@ export default function IndividualDetailScreen() {
 
   // 点击图片查看大图 - 支持跨记录滑动
   const handleImagePress = (allRecordsPaths: { recordId: number; paths: string[] }[], clickedPath: string) => {
-    const allImages: string[] = [];
-    for (const item of allRecordsPaths) {
-      allImages.push(...item.paths);
-    }
+    const allImages = allRecordsPaths.flatMap(r => r.paths);
     setViewingImagePaths(allImages);
     const globalIndex = allImages.indexOf(clickedPath);
     setViewingImageIndex(globalIndex >= 0 ? globalIndex : 0);
   };
 
-  // 点击添加图片 - 显示图片选择弹窗
-  const handleAddImage = async (recordId: number) => {
-    setAddImageRecordId(recordId);
-    await loadExistingUris();  // 加载已添加的图片 URI 列表
-    setShowAddImageModal(true);
+  // 点击添加图片 - 显示图片来源选择弹窗
+  const handleAddImage = (recordId: number) => {
+    setPendingAddRecordId(recordId);
+    setShowImageSourceModal(true);
   };
 
-  // 点击虚拟的今天记录 - 创建新记录并显示添加图片弹窗
+  // 点击虚拟的今天记录 - 创建新记录并显示图片来源选择弹窗
   const handleAddTodayRecord = async () => {
     try {
       const today = new Date();
@@ -293,13 +297,74 @@ export default function IndividualDetailScreen() {
       setHasTodayRecord(true);
       loadData();
 
-      // 显示添加图片弹窗
-      setAddImageRecordId(newRecordId);
-      await loadExistingUris();  // 加载已添加的图片 URI 列表
-      setShowAddImageModal(true);
+      // 显示图片来源选择弹窗
+      setPendingAddRecordId(newRecordId);
+      setShowImageSourceModal(true);
     } catch (error) {
       console.error('Failed to create today record:', error);
       Alert.alert('错误', '创建记录失败');
+    }
+  };
+
+  // 图片来源选择 - 拍照
+  const handleImageSourceCamera = async () => {
+    setShowImageSourceModal(false);
+
+    try {
+      const hasPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!hasPermission) {
+        Alert.alert('权限不足', '需要相机权限才能拍照');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const asset = result.assets[0];
+        // 保存到系统相册
+        try {
+          await MediaLibrary.createAssetAsync(asset.uri);
+        } catch (e) {
+          console.error('Failed to save to album:', e);
+        }
+        // 直接添加到记录（静默添加）
+        await addImageToRecord(pendingAddRecordId, asset.uri);
+      }
+    } catch (error) {
+      console.error('Failed to take photo:', error);
+    }
+    setPendingAddRecordId(null);
+  };
+
+  // 图片来源选择 - 从相册选择
+  const handleImageSourceGallery = async () => {
+    setShowImageSourceModal(false);
+    await loadExistingUris();
+    openGalleryPicker();
+  };
+
+  // 添加图片到记录
+  const addImageToRecord = async (recordId: number | null, uri: string) => {
+    if (!recordId) return;
+
+    try {
+      const timestamp = Date.now();
+      const currentRecord = await RecordRepository.findById(recordId);
+      if (!currentRecord) return;
+
+      const existingPaths: string[] = Array.isArray(currentRecord.imagePath)
+        ? currentRecord.imagePath
+        : currentRecord.imagePath ? [currentRecord.imagePath] : [];
+
+      const newPaths = [...existingPaths, uri];
+      await RecordRepository.update(recordId, { imagePath: newPaths });
+      loadData();
+    } catch (error) {
+      console.error('Failed to add image:', error);
     }
   };
 
@@ -312,182 +377,11 @@ export default function IndividualDetailScreen() {
            today.getDate() === recordDate.getDate();
   };
 
-  // 请求相机权限
-  const requestCameraPermission = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('权限不足', '需要相机权限才能拍照');
-      return false;
-    }
-    return true;
-  };
-
-  // 请求相册权限
-  const requestLibraryPermission = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('权限不足', '需要相册权限才能选择图片');
-      return false;
-    }
-    return true;
-  };
-
-  // 拍照
-  const takePhoto = async () => {
-    setShowAddImageModal(false);
-    const hasPermission = await requestCameraPermission();
-    if (!hasPermission) return;
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      const timestamp = getImageCreationTime(asset);
-      // 直接使用原始 URI，不复制到应用目录
-      await saveNewImages([asset.uri], timestamp);
-    }
-  };
-
-  // 从相册选择
-  const pickFromLibrary = async () => {
-    setShowAddImageModal(false);
-    const hasPermission = await requestLibraryPermission();
-    if (!hasPermission) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 1,
-      exif: true,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      // 如果开启隐藏已添加，则过滤掉已存在的 URI
-      let assetsToAdd = result.assets;
-      let skippedCount = 0;
-      if (hideAlreadyAdded && existingUris.length > 0) {
-        const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
-        for (const asset of result.assets) {
-          // 使用 URI 判断是否已添加
-          if (existingUris.includes(asset.uri)) {
-            skippedCount++;
-          } else {
-            filteredAssets.push(asset);
-          }
-        }
-        assetsToAdd = filteredAssets;
-        if (skippedCount > 0) {
-          Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
-        }
-        if (assetsToAdd.length === 0) {
-          Alert.alert('提示', '所有选中的图片都已添加过');
-          return;
-        }
-      }
-
-      // 按日期分组图片，同时收集 URI
-      const imagesByDate = new Map<number, { uris: string[] }>();
-
-      for (const asset of assetsToAdd) {
-        const uri = asset.uri;
-        // 直接使用 ImagePicker 返回的 creationTime（来自 EXIF），不调用 getAssetInfoAsync
-        const timestamp = (asset as any).creationTime || Date.now();
-
-        // 找到该日期所在的分组键（使用日期戳的起始-of-day）
-        const dayKey = getStartOfDay(timestamp);
-
-        if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, { uris: [] });
-        }
-        imagesByDate.get(dayKey)!.uris.push(uri);
-      }
-
-      // 保存图片（直接使用原始 URI，不复制）
-      for (const [dayKey, data] of imagesByDate) {
-        await saveNewImages(data.uris, dayKey);
-      }
-    }
-  };
-
   // 获取指定时间戳的"一天开始"时间戳（00:00:00）
   const getStartOfDay = (timestamp: number): number => {
     const date = new Date(timestamp);
     date.setHours(0, 0, 0, 0);
     return date.getTime();
-  };
-
-  // 获取图片创建时间
-  const getImageCreationTime = (asset: ImagePicker.ImagePickerAsset): number => {
-    // Cast to any to access runtime properties not in type definition
-    const assetAny = asset as any;
-
-    let timestamp: number | null = null;
-
-    // 1. 优先从 EXIF DateTimeOriginal 读取（最可靠的原图时间）
-    if (assetAny.exif?.DateTimeOriginal) {
-      const dateStr = assetAny.exif.DateTimeOriginal as string;
-      // 支持多种格式: "2024:01:15 10:30:00" 或 "2024-01-15 10:30:00"
-      const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
-      const parsed = new Date(normalizedStr);
-      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
-        timestamp = parsed.getTime();
-      }
-    }
-
-    // 2. 尝试从 EXIF DateTime 读取
-    if (timestamp === null && assetAny.exif?.DateTime) {
-      const dateStr = assetAny.exif.DateTime as string;
-      const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
-      const parsed = new Date(normalizedStr);
-      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
-        timestamp = parsed.getTime();
-      }
-    }
-
-    // 3. 尝试从 EXIF 其它字段读取
-    if (timestamp === null) {
-      const exif = assetAny.exif;
-      if (exif) {
-        // 尝试 PixelYDimension 和其他可能包含日期的字段
-        const possibleDateFields = ['DateTimeDigitized', 'DateTimeOriginal', 'DateTime'];
-        for (const field of possibleDateFields) {
-          if (exif[field] && timestamp === null) {
-            const dateStr = String(exif[field]);
-            const normalizedStr = dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
-            const parsed = new Date(normalizedStr);
-            if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2000 && parsed.getFullYear() <= 2100) {
-              timestamp = parsed.getTime();
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // 4. 使用 creationTime（如果是有效的历史时间，且不是最近的时间）
-    if (timestamp === null && assetAny.creationTime) {
-      const ct = assetAny.creationTime;
-      // creationTime 可能是秒或毫秒
-      const ctMs = ct < 1e12 ? ct * 1000 : ct;
-      const ctDate = new Date(ctMs);
-      const now = Date.now();
-      const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
-      // 只有当 creationTime 是历史时间（2020-2099）且不是最近3天内的时间才使用
-      // 如果是最近的时间，可能是闲鱼等平台保存时的时间戳，不可信
-      if (ctDate.getFullYear() >= 2020 && ctDate.getFullYear() <= 2100 && (now - ctMs) > threeDaysMs) {
-        timestamp = ctMs;
-      }
-    }
-
-    // 5. 如果没有有效时间戳，返回当前时间（兜底）
-    if (timestamp === null) {
-      timestamp = Date.now();
-    }
-
-    return timestamp;
   };
 
   // 检查时间戳是否是同一天
@@ -500,45 +394,32 @@ export default function IndividualDetailScreen() {
   };
 
   // 打开自定义相册选择器
-  const openCustomGallery = async () => {
-    setShowAddImageModal(false);
-
-    // 如果使用系统相册，直接调用系统图片选择器
-    if (useSystemAlbum) {
-      await pickFromImagePicker();
-      return;
-    }
-
+  const openGalleryPicker = async () => {
     try {
-      // 尝试使用 MediaLibrary 获取设备相册
-      let useMediaLibrary = false;
+      setGalleryLoading(true);
+      setGallerySelectedIds([]);
+      setGalleryImages([]);
 
+      // 检查 MediaLibrary 权限
+      let hasPermission = false;
       try {
-        // 先检查 MediaLibrary 是否可用
-        const { status: existingStatus } = await MediaLibrary.getPermissionsAsync();
-
-        if (existingStatus === 'granted') {
-          useMediaLibrary = true;
-        } else {
-          // 尝试请求权限
-          const { status } = await MediaLibrary.requestPermissionsAsync();
-          useMediaLibrary = status === 'granted';
+        const { status } = await MediaLibrary.getPermissionsAsync();
+        hasPermission = status === 'granted';
+        if (!hasPermission) {
+          const { status: reqStatus } = await MediaLibrary.requestPermissionsAsync();
+          hasPermission = reqStatus === 'granted';
         }
       } catch (e) {
-        // MediaLibrary 模块不可用或出错，使用 ImagePicker
-        useMediaLibrary = false;
+        hasPermission = false;
       }
 
-      if (!useMediaLibrary) {
-        // 使用 ImagePicker 作为备选
-        await pickFromImagePicker();
+      if (!hasPermission) {
+        Alert.alert('权限不足', '需要相册权限才能选择图片');
+        setGalleryLoading(false);
         return;
       }
 
-      // 使用 MediaLibrary 获取所有图片
-      setGalleryLoading(true);
-      setGallerySelectedIds([]);
-
+      // 使用 MediaLibrary 获取图片（分页加载，每页500张）
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
         first: 500,
@@ -546,90 +427,37 @@ export default function IndividualDetailScreen() {
       });
 
       setGalleryImages(assets.assets);
-      await loadExistingUris();
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
       setShowCustomGallery(true);
-      setGalleryLoading(false);
     } catch (error) {
       console.error('Failed to load gallery images:', error);
-      // 发生错误时自动开启系统相册并回退到 ImagePicker
-      setUseSystemAlbum(true);
-      await pickFromImagePicker();
+      Alert.alert('错误', '加载图片失败');
+    } finally {
+      setGalleryLoading(false);
     }
   };
 
-  // 使用 ImagePicker 选择图片（回退方案）
-  const pickFromImagePicker = async () => {
-    try {
-      const hasPermission = await requestLibraryPermission();
-      if (!hasPermission) {
-        Alert.alert('提示', '需要相册权限才能选择图片');
-        return;
-      }
+  // 加载更多图片
+  const loadMoreGalleryImages = async () => {
+    if (galleryLoading || !galleryHasMore || !galleryCursor) return;
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        quality: 1,
-        exif: true,
+    try {
+      setGalleryLoading(true);
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        after: galleryCursor,
+        sortBy: ['creationTime'],
       });
 
-      if (!result.canceled && result.assets.length > 0) {
-        // 直接处理图片
-        await processPickerAssets(result.assets);
-      }
+      setGalleryImages(prev => [...prev, ...assets.assets]);
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
     } catch (error) {
-      console.error('Failed to pick images:', error);
-      Alert.alert('错误', '选择图片失败');
-    }
-  };
-
-  // 处理 ImagePicker 返回的图片（回退方案）
-  const processPickerAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
-    try {
-      let assetsToAdd = assets;
-
-      // 如果是隐藏模式，过滤掉已添加的图片（使用 URI 判断）
-      if (hideAlreadyAdded && existingUris.length > 0) {
-        const filteredAssets: ImagePicker.ImagePickerAsset[] = [];
-        let skippedCount = 0;
-        for (const asset of assets) {
-          if (existingUris.includes(asset.uri)) {
-            skippedCount++;
-          } else {
-            filteredAssets.push(asset);
-          }
-        }
-        assetsToAdd = filteredAssets;
-        if (skippedCount > 0) {
-          Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
-        }
-        if (assetsToAdd.length === 0) {
-          Alert.alert('提示', '所有选中的图片都已添加过');
-          return;
-        }
-      }
-
-      // 按日期分组图片
-      const imagesByDate = new Map<number, { uris: string[] }>();
-
-      for (const asset of assetsToAdd) {
-        const uri = asset.uri;
-        const timestamp = getImageCreationTime(asset);
-        const dayKey = getStartOfDay(timestamp);
-
-        if (!imagesByDate.has(dayKey)) {
-          imagesByDate.set(dayKey, { uris: [] });
-        }
-        imagesByDate.get(dayKey)!.uris.push(uri);
-      }
-
-      // 保存图片（直接使用原始 URI，不复制）
-      for (const [dayKey, data] of imagesByDate) {
-        await saveNewImages(data.uris, dayKey);
-      }
-    } catch (error) {
-      console.error('Failed to process picker assets:', error);
-      Alert.alert('错误', '保存图片失败');
+      console.error('Failed to load more gallery images:', error);
+    } finally {
+      setGalleryLoading(false);
     }
   };
 
@@ -647,17 +475,6 @@ export default function IndividualDetailScreen() {
     });
   };
 
-  // 长按选择（开始多选模式并选中当前项）
-  const handleLongPressSelection = (asset: MediaLibrary.Asset) => {
-    const assetId = asset.id;
-    if (!assetId) return;
-
-    // 选中当前项
-    if (!gallerySelectedIds.includes(assetId)) {
-      setGallerySelectedIds(prev => [...prev, assetId]);
-    }
-  };
-
   // 确认相册选择
   const confirmGallerySelection = async () => {
     if (gallerySelectedIds.length === 0) {
@@ -669,30 +486,22 @@ export default function IndividualDetailScreen() {
       // 获取选中的图片资源
       let selectedAssets = galleryImages.filter(img => img.id && gallerySelectedIds.includes(img.id));
 
-      // 如果是隐藏模式，过滤掉已添加的图片（使用 URI 判断）
-      if (hideAlreadyAdded && existingUris.length > 0) {
+      // 过滤掉已添加的图片（使用 URI 判断）
+      if (existingUris.length > 0) {
         const beforeCount = selectedAssets.length;
+        const normalizedExisting = existingUris.map(normalizeUri);
         selectedAssets = selectedAssets.filter(img => {
-          // 使用 URI 判断是否已添加
-          if (existingUris.includes(img.uri)) {
-            return false;
-          }
-          return true;
+          const normalizedImgUri = normalizeUri(img.uri);
+          return !normalizedExisting.includes(normalizedImgUri);
         });
         const skippedCount = beforeCount - selectedAssets.length;
         if (skippedCount > 0) {
           Alert.alert('提示', `已跳过 ${skippedCount} 张已添加的图片`);
         }
         if (selectedAssets.length === 0) {
-          Alert.alert('提示', '没有可添加的图片');
+          setShowCustomGallery(false);
           return;
         }
-      }
-
-      if (selectedAssets.length === 0) {
-        Alert.alert('提示', '未找到有效的图片');
-        setShowCustomGallery(false);
-        return;
       }
 
       // 直接使用原始 URI，不调用 getAssetInfoAsync
@@ -1122,31 +931,23 @@ export default function IndividualDetailScreen() {
         scrollViewRef={scrollViewRef as any}
       />
 
-      {/* 添加图片弹窗 */}
-      <AddImageModal
-        visible={showAddImageModal}
-        useSystemAlbum={useSystemAlbum}
-        onUseSystemAlbumToggle={setUseSystemAlbum}
-        hideAlreadyAdded={hideAlreadyAdded}
-        onHideToggle={setHideAlreadyAdded}
-        onClose={() => setShowAddImageModal(false)}
-        onTakePhoto={takePhoto}
-        onPickFromGallery={openCustomGallery}
-      />
-
       {/* 自定义相册选择器 */}
       <CustomGalleryPicker
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingUris={existingUris}
-        hideAlreadyAdded={hideAlreadyAdded}
+        existingUris={[
+          ...existingUris,
+          ...galleryImages
+            .filter(img => img.id && gallerySelectedIds.includes(img.id))
+            .map(img => img.uri)
+        ]}
         loading={galleryLoading}
+        hasMore={galleryHasMore}
+        onLoadMore={loadMoreGalleryImages}
         onClose={closeCustomGallery}
         onConfirm={confirmGallerySelection}
         onToggleSelection={toggleGallerySelection}
-        onHideToggle={setHideAlreadyAdded}
-        onLongPressSelection={handleLongPressSelection}
       />
 
       {/* 长按图片菜单 */}
@@ -1182,6 +983,35 @@ export default function IndividualDetailScreen() {
           );
         }}
       />
+
+      {/* 图片来源选择弹窗 */}
+      <Modal
+        visible={showImageSourceModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowImageSourceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.addImageModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageSourceModal(false)}
+        >
+          <View style={[styles.addImageModalContent, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity style={styles.addImageModalBtn} onPress={handleImageSourceCamera}>
+              <Text style={[styles.addImageModalBtnText, { color: colors.textPrimary }]}>拍照</Text>
+            </TouchableOpacity>
+            <View style={[styles.addImageModalDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={styles.addImageModalBtn} onPress={handleImageSourceGallery}>
+              <Text style={[styles.addImageModalBtnText, { color: colors.textPrimary }]}>从相册选择</Text>
+            </TouchableOpacity>
+            <View style={[styles.addImageModalDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={[styles.addImageModalBtn, styles.addImageModalBtnLast]} onPress={() => setShowImageSourceModal(false)}>
+              <Text style={[styles.addImageModalBtnText, { color: colors.textDisabled }]}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }

@@ -19,9 +19,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
+import { CustomGalleryPicker } from '../components';
 import type { RootStackParamList, Group, Individual, Record as RecordType } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'EditIndividual'>;
@@ -51,6 +53,14 @@ export default function EditIndividualScreen() {
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [recordImages, setRecordImages] = useState<RecordImage[]>([]);
+
+  // 自定义相册选择器状态
+  const [showCustomGallery, setShowCustomGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<MediaLibrary.Asset[]>([]);
+  const [gallerySelectedIds, setGallerySelectedIds] = useState<string[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryHasMore, setGalleryHasMore] = useState(false);
+  const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
 
   // 弹窗视图模式
   const [groupPickerViewMode, setGroupPickerViewMode] = useState<'list' | 'grid'>('grid');
@@ -146,27 +156,6 @@ export default function EditIndividualScreen() {
     return true;
   };
 
-  const getImageCreationTime = (asset: ImagePicker.ImagePickerAsset): number => {
-    let timestamp: number = Date.now();
-    const assetAny = asset as any;
-
-    if (assetAny.creationTime) {
-      timestamp = assetAny.creationTime;
-    }
-
-    const date = new Date(timestamp);
-    if (date.getFullYear() < 2020) {
-      timestamp = timestamp * 1000;
-    }
-
-    const finalDate = new Date(timestamp);
-    if (finalDate.getFullYear() < 2020 || finalDate.getFullYear() > 2100) {
-      return Date.now();
-    }
-
-    return timestamp;
-  };
-
   const isSameDay = (ts1: number, ts2: number): boolean => {
     const d1 = new Date(ts1);
     const d2 = new Date(ts2);
@@ -175,78 +164,149 @@ export default function EditIndividualScreen() {
            d1.getDate() === d2.getDate();
   };
 
-  const pickImagesFromLibrary = async () => {
-    const hasPermission = await requestPermission('library');
-    if (!hasPermission) return;
-
+  const openGalleryPicker = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        quality: 1,
-        selectionLimit: 0,
-        exif: true,
+      setGalleryLoading(true);
+      setGallerySelectedIds([]);
+      setGalleryImages([]);
+
+      let hasPermission = false;
+      try {
+        const { status } = await MediaLibrary.getPermissionsAsync();
+        hasPermission = status === 'granted';
+        if (!hasPermission) {
+          const { status: reqStatus } = await MediaLibrary.requestPermissionsAsync();
+          hasPermission = reqStatus === 'granted';
+        }
+      } catch (e) {
+        hasPermission = false;
+      }
+
+      if (!hasPermission) {
+        Alert.alert('权限不足', '需要相册权限才能选择图片');
+        setGalleryLoading(false);
+        return;
+      }
+
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        sortBy: ['creationTime'],
       });
 
-      if (!result.canceled && result.assets.length > 0) {
-        // 按日期分组图片
-        const imagesByDate = new Map<number, { uris: string[] }>();
-
-        for (const asset of result.assets) {
-          const uri = asset.uri;
-          const timestamp = getImageCreationTime(asset);
-          const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
-
-          if (!imagesByDate.has(dayKey)) {
-            imagesByDate.set(dayKey, { uris: [] });
-          }
-          imagesByDate.get(dayKey)!.uris.push(uri);
-        }
-
-        // 获取当前所有记录
-        const currentRecords = await RecordRepository.findByIndividualId(individualId);
-
-        // 分别保存每个日期组的图片（直接使用原始 URI，不复制）
-        for (const [dayKey, data] of imagesByDate) {
-          // 直接使用原始 URI
-          const uris = data.uris;
-
-          // 查找目标日期是否有记录
-          const targetRecord = currentRecords.find(r => isSameDay(r.recordDate, dayKey));
-
-          if (targetRecord) {
-            // 合并到目标记录
-            const record = await RecordRepository.findById(targetRecord.id);
-            if (record) {
-              const existingPaths: string[] = Array.isArray(record.imagePath)
-                ? record.imagePath
-                : record.imagePath ? [record.imagePath] : [];
-              const newPaths = [...existingPaths, ...uris];
-              await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
-            }
-          } else {
-            // 创建新记录
-            const imageDate = new Date(dayKey);
-            const dateStr = `${String(imageDate.getMonth() + 1).padStart(2, '0')}.${String(imageDate.getDate()).padStart(2, '0')}`;
-            await RecordRepository.create({
-              individualId,
-              imagePath: data.uris,
-              title: `${dateStr} 记录`,
-              description: '',
-              recordDate: dayKey,
-            });
-          }
-        }
-
-        setShowImagePicker(false);
-        loadData();
-      } else {
-        setShowImagePicker(false);
-      }
+      setGalleryImages(assets.assets);
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
+      setShowCustomGallery(true);
     } catch (error) {
-      console.error('Failed to pick images:', error);
-      setShowImagePicker(false);
+      console.error('Failed to load gallery images:', error);
+      Alert.alert('错误', '加载图片失败');
+    } finally {
+      setGalleryLoading(false);
     }
+  };
+
+  const loadMoreGalleryImages = async () => {
+    if (galleryLoading || !galleryHasMore || !galleryCursor) return;
+
+    try {
+      setGalleryLoading(true);
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        after: galleryCursor,
+        sortBy: ['creationTime'],
+      });
+
+      setGalleryImages(prev => [...prev, ...assets.assets]);
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
+    } catch (error) {
+      console.error('Failed to load more gallery images:', error);
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
+
+  const toggleGallerySelection = (asset: MediaLibrary.Asset) => {
+    const assetId = asset.id;
+    if (!assetId) return;
+    setGallerySelectedIds(prev =>
+      prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId]
+    );
+  };
+
+  const confirmGallerySelection = async () => {
+    if (gallerySelectedIds.length === 0) {
+      Alert.alert('提示', '请先选择图片');
+      return;
+    }
+
+    const selected = galleryImages.filter(img => img.id && gallerySelectedIds.includes(img.id));
+
+    // 按日期分组图片
+    const imagesByDate = new Map<number, { uris: string[] }>();
+
+    for (const asset of selected) {
+      const uri = asset.uri;
+      const timestamp = asset.creationTime || Date.now();
+      const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
+
+      if (!imagesByDate.has(dayKey)) {
+        imagesByDate.set(dayKey, { uris: [] });
+      }
+      imagesByDate.get(dayKey)!.uris.push(uri);
+    }
+
+    // 获取当前所有记录
+    const currentRecords = await RecordRepository.findByIndividualId(individualId);
+
+    // 分别保存每个日期组的图片（直接使用原始 URI，不复制）
+    for (const [dayKey, data] of imagesByDate) {
+      const uris = data.uris;
+
+      // 查找目标日期是否有记录
+      const targetRecord = currentRecords.find(r => isSameDay(r.recordDate, dayKey));
+
+      if (targetRecord) {
+        // 合并到目标记录
+        const record = await RecordRepository.findById(targetRecord.id);
+        if (record) {
+          const existingPaths: string[] = Array.isArray(record.imagePath)
+            ? record.imagePath
+            : record.imagePath ? [record.imagePath] : [];
+          const newPaths = [...existingPaths, ...uris];
+          await RecordRepository.update(targetRecord.id, { imagePath: newPaths });
+        }
+      } else {
+        // 创建新记录
+        const imageDate = new Date(dayKey);
+        const dateStr = `${String(imageDate.getMonth() + 1).padStart(2, '0')}.${String(imageDate.getDate()).padStart(2, '0')}`;
+        await RecordRepository.create({
+          individualId,
+          imagePath: uris,
+          title: `${dateStr} 记录`,
+          description: '',
+          recordDate: dayKey,
+        });
+      }
+    }
+
+    setShowCustomGallery(false);
+    setGallerySelectedIds([]);
+    setGalleryImages([]);
+    loadData();
+  };
+
+  const closeGalleryPicker = () => {
+    setShowCustomGallery(false);
+    setGallerySelectedIds([]);
+    setGalleryImages([]);
+  };
+
+  const pickImagesFromLibrary = async () => {
+    setShowImagePicker(false);
+    await openGalleryPicker();
   };
 
   const takePhoto = async () => {
@@ -262,7 +322,8 @@ export default function EditIndividualScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
-        const timestamp = getImageCreationTime(asset);
+        const assetAny = asset as any;
+        const timestamp = assetAny.creationTime || Date.now();
         const dayKey = new Date(timestamp).setHours(0, 0, 0, 0);
         // 直接使用原始 URI，不复制到应用目录
         const uri = asset.uri;
@@ -556,6 +617,20 @@ export default function EditIndividualScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* 自定义相册选择器 */}
+      <CustomGalleryPicker
+        visible={showCustomGallery}
+        images={galleryImages}
+        selectedIds={gallerySelectedIds}
+        existingUris={recordImages.map(img => img.imagePath)}
+        loading={galleryLoading}
+        hasMore={galleryHasMore}
+        onLoadMore={loadMoreGalleryImages}
+        onClose={closeGalleryPicker}
+        onConfirm={confirmGallerySelection}
+        onToggleSelection={toggleGallerySelection}
+      />
 
       {/* 分组选择弹窗 */}
       <Modal

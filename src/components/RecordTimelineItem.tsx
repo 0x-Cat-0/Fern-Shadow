@@ -136,7 +136,8 @@ export function RecordTimelineItem({
         <View style={styles.imagesContainer}>
           {item.imagePaths.length > 0 ? (
             <>
-              {item.imagePaths.map((path: string, idx: number) => (
+              {item.imagePaths.map((path: string, idx: number) => {
+                return (
                 <TouchableOpacity
                   key={idx}
                   onPress={() => {
@@ -153,7 +154,8 @@ export function RecordTimelineItem({
                     resizeMode="cover"
                   />
                 </TouchableOpacity>
-              ))}
+              );
+              })}
               {/* 今天的记录显示添加按钮 */}
               {isToday(item.dateTimestamp) && (
                 <TouchableOpacity

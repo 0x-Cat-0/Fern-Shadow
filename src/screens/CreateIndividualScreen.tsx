@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -18,11 +18,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 
 import { useTheme } from '../hooks/useTheme';
 import { IndividualRepository, RecordRepository, GroupRepository } from '../database/repositories';
-import { spacing, layout } from '../theme/spacing';
-import { typography } from '../theme/typography';
+import { CustomGalleryPicker } from '../components';
 import type { RootStackParamList, Group } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateIndividual'>;
@@ -48,10 +48,20 @@ export default function CreateIndividualScreen() {
   const [description, setDescription] = useState('');
   const [groupIds, setGroupIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
-  const [showImagePicker, setShowImagePicker] = useState(false);
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [coverIndex, setCoverIndex] = useState(0);
+
+  // 自定义相册选择器状态
+  const [showCustomGallery, setShowCustomGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<MediaLibrary.Asset[]>([]);
+  const [gallerySelectedIds, setGallerySelectedIds] = useState<string[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryHasMore, setGalleryHasMore] = useState(false);
+  const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
+
+  // 图片来源选择弹窗状态
+  const [showImageSourceModal, setShowImageSourceModal] = useState(false);
 
   // 弹窗视图模式
   const [groupPickerViewMode, setGroupPickerViewMode] = useState<'list' | 'grid'>('grid');
@@ -92,7 +102,7 @@ export default function CreateIndividualScreen() {
     if (imageSource === 'camera') {
       takePhoto();
     } else if (imageSource === 'library') {
-      pickImagesFromLibrary();
+      openGalleryPicker();
     }
   }, [imageSource]);
 
@@ -122,68 +132,6 @@ export default function CreateIndividualScreen() {
     return true;
   };
 
-  const getImageCreationTime = (asset: ImagePicker.ImagePickerAsset): number | null => {
-    let timestamp: number | null = null;
-    const assetAny = asset as any;
-
-    if (assetAny.creationTime) {
-      timestamp = assetAny.creationTime;
-    } else if (assetAny.exif && assetAny.exif.DateTimeOriginal) {
-      const dateStr = assetAny.exif.DateTimeOriginal as string;
-      const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
-      if (!isNaN(parsed.getTime())) {
-        timestamp = parsed.getTime();
-      }
-    } else if (assetAny.exif && assetAny.exif.DateTime) {
-      const dateStr = assetAny.exif.DateTime as string;
-      const parsed = new Date(dateStr.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3'));
-      if (!isNaN(parsed.getTime())) {
-        timestamp = parsed.getTime();
-      }
-    }
-
-    if (timestamp === null) return null;
-
-    const date = new Date(timestamp);
-    if (date.getFullYear() < 2020) {
-      timestamp = timestamp * 1000;
-    }
-
-    const finalDate = new Date(timestamp);
-    if (finalDate.getFullYear() < 2020 || finalDate.getFullYear() > 2100) {
-      return null;
-    }
-
-    return timestamp;
-  };
-
-  const pickImagesFromLibrary = async () => {
-    const hasPermission = await requestPermission('library');
-    if (!hasPermission) return;
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        quality: 1,
-        selectionLimit: 0,
-        exif: true,
-      });
-
-      if (!result.canceled && result.assets.length > 0) {
-        const newImages: SelectedImage[] = result.assets.map(asset => ({
-          uri: asset.uri,
-          width: asset.width,
-          height: asset.height,
-          creationTime: getImageCreationTime(asset),
-        }));
-        setSelectedImages(prev => [...prev, ...newImages]);
-      }
-    } catch (error) {
-      console.error('Failed to pick images:', error);
-    }
-  };
-
   const takePhoto = async () => {
     const hasPermission = await requestPermission('camera');
     if (!hasPermission) return;
@@ -197,6 +145,13 @@ export default function CreateIndividualScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
+        // 保存到系统相册
+        try {
+          await MediaLibrary.createAssetAsync(asset.uri);
+        } catch (e) {
+          console.error('Failed to save to album:', e);
+        }
+        // 直接添加到选中图片
         const newImage: SelectedImage = {
           uri: asset.uri,
           width: asset.width,
@@ -215,7 +170,115 @@ export default function CreateIndividualScreen() {
   };
 
   const showImageOptions = () => {
-    setShowImagePicker(true);
+    setShowImageSourceModal(true);
+  };
+
+  const handleImageSourceCamera = async () => {
+    setShowImageSourceModal(false);
+    await takePhoto();
+  };
+
+  const handleImageSourceGallery = () => {
+    setShowImageSourceModal(false);
+    openGalleryPicker();
+  };
+
+  const openGalleryPicker = async () => {
+    try {
+      setGalleryLoading(true);
+      setGallerySelectedIds([]);
+      setGalleryImages([]);
+
+      let hasPermission = false;
+      try {
+        const { status } = await MediaLibrary.getPermissionsAsync();
+        hasPermission = status === 'granted';
+        if (!hasPermission) {
+          const { status: reqStatus } = await MediaLibrary.requestPermissionsAsync();
+          hasPermission = reqStatus === 'granted';
+        }
+      } catch (e) {
+        hasPermission = false;
+      }
+
+      if (!hasPermission) {
+        Alert.alert('权限不足', '需要相册权限才能选择图片');
+        setGalleryLoading(false);
+        return;
+      }
+
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        sortBy: ['creationTime'],
+      });
+
+      setGalleryImages(assets.assets);
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
+      setShowCustomGallery(true);
+    } catch (error) {
+      console.error('Failed to load gallery images:', error);
+      Alert.alert('错误', '加载图片失败');
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
+
+  const loadMoreGalleryImages = async () => {
+    if (galleryLoading || !galleryHasMore || !galleryCursor) return;
+
+    try {
+      setGalleryLoading(true);
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 500,
+        after: galleryCursor,
+        sortBy: ['creationTime'],
+      });
+
+      setGalleryImages(prev => [...prev, ...assets.assets]);
+      setGalleryCursor(assets.endCursor || null);
+      setGalleryHasMore(assets.hasNextPage || false);
+    } catch (error) {
+      console.error('Failed to load more gallery images:', error);
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
+
+  const toggleGallerySelection = (asset: MediaLibrary.Asset) => {
+    const assetId = asset.id;
+    if (!assetId) return;
+    setGallerySelectedIds(prev =>
+      prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId]
+    );
+  };
+
+  const confirmGallerySelection = () => {
+    if (gallerySelectedIds.length === 0) {
+      Alert.alert('提示', '请先选择图片');
+      return;
+    }
+
+    const selected = galleryImages.filter(img => img.id && gallerySelectedIds.includes(img.id));
+    const newImages: SelectedImage[] = selected.map(asset => ({
+      uri: asset.uri,
+      width: asset.width,
+      height: asset.height,
+      creationTime: asset.creationTime || Date.now(),
+    }));
+
+    setSelectedImages(prev => [...prev, ...newImages]);
+    setShowCustomGallery(false);
+    setGallerySelectedIds([]);
+    setGalleryImages([]);
+  };
+
+  const closeGalleryPicker = () => {
+    setShowCustomGallery(false);
+    setGallerySelectedIds([]);
+    setGalleryImages([]);
   };
 
   const groupImagesByDate = (images: SelectedImage[]): Map<string, SelectedImage[]> => {
@@ -427,32 +490,19 @@ export default function CreateIndividualScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 图片选择弹窗 */}
-      <Modal
-        visible={showImagePicker}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setShowImagePicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowImagePicker(false)}
-        >
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <TouchableOpacity style={styles.modalBtn} onPress={takePhoto}>
-              <Text style={[styles.modalBtnText, { color: colors.textDisabled }]}>拍照</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalBtn} onPress={pickImagesFromLibrary}>
-              <Text style={[styles.modalBtnText, { color: colors.textDisabled }]}>从相册选择</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalBtn, styles.modalBtnLast]} onPress={() => setShowImagePicker(false)}>
-              <Text style={[styles.modalBtnText, { color: colors.textDisabled }]}>取消</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/* 自定义相册选择器 */}
+      <CustomGalleryPicker
+        visible={showCustomGallery}
+        images={galleryImages}
+        selectedIds={gallerySelectedIds}
+        existingUris={selectedImages.map(img => img.uri)}
+        loading={galleryLoading}
+        hasMore={galleryHasMore}
+        onLoadMore={loadMoreGalleryImages}
+        onClose={closeGalleryPicker}
+        onConfirm={confirmGallerySelection}
+        onToggleSelection={toggleGallerySelection}
+      />
 
       {/* 分组选择弹窗 */}
       <Modal
@@ -579,6 +629,41 @@ export default function CreateIndividualScreen() {
               )}
             </ScrollView>
           </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+      {/* 图片来源选择弹窗 */}
+      <Modal
+        visible={showImageSourceModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowImageSourceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowImageSourceModal(false)}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={handleImageSourceCamera}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>拍照</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={handleImageSourceGallery}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textPrimary }]}>从相册选择</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnLast]}
+              onPress={() => setShowImageSourceModal(false)}
+            >
+              <Text style={[styles.modalBtnText, { color: colors.textDisabled }]}>取消</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
     </View>
@@ -749,7 +834,6 @@ const styles = StyleSheet.create({
   },
   modalBtnText: {
     fontSize: 16,
-    color: '#666666',
   },
   dragHandleContainer: {
     alignItems: 'center',

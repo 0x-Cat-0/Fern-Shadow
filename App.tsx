@@ -222,7 +222,7 @@ function TabContent() {
       <Modal
         visible={showImagePickerModal}
         transparent
-        animationType="none"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setShowImagePickerModal(false)}
       >
@@ -258,7 +258,7 @@ function TabContent() {
       <Modal
         visible={showHelpModal}
         transparent
-        animationType="none"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setShowHelpModal(false)}
       >
@@ -269,7 +269,7 @@ function TabContent() {
       <Modal
         visible={showAboutModal}
         transparent
-        animationType="none"
+        animationType="fade"
         statusBarTranslucent
         onRequestClose={() => setShowAboutModal(false)}
       >
