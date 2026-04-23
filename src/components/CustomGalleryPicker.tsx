@@ -8,7 +8,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   SectionList,
-  ScrollView,
   Dimensions,
   Switch,
   PanResponder,
@@ -149,22 +148,6 @@ export function CustomGalleryPicker({
   const minHeight = screenHeight * 0.4;
   const maxHeight = screenHeight * 0.9;
 
-  // 预览页触摸关闭
-  const previewPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => false,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (evt) => {
-        const { pageY } = evt.nativeEvent;
-        const screenH = SCREEN_HEIGHT;
-        if (pageY < 100) return;
-        if (pageY > screenH - 120) return;
-        handleClosePreview();
-      },
-    })
-  ).current;
-
   // 底部弹窗拖动
   const sheetPanResponder = useRef(
     PanResponder.create({
@@ -297,9 +280,6 @@ export function CustomGalleryPicker({
     if (index >= 0) {
       setPreviewIndex(index);
       setPreviewItem(img);
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
-      }, 0);
     }
   }, [flatGroupedImages]);
 
@@ -378,8 +358,6 @@ export function CustomGalleryPicker({
       setPreviewItem(flatGroupedImages[newIndex]);
     }
   }, [previewIndex, flatGroupedImages]);
-
-  const scrollViewRef = useRef<any>(null);
 
   // 计算可见项的 key
   const keyExtractor = useCallback((item: MediaLibrary.Asset, index: number) => {
@@ -498,8 +476,28 @@ export function CustomGalleryPicker({
               </TouchableOpacity>
             </TouchableOpacity>
 
-            {/* 中间图片区域 */}
+            {/* 中间图片区域 - 左侧1/5点击向左,右侧1/5点击向右,中间区域点击关闭 */}
             <View style={styles.previewImageContainer}>
+              {/* 左侧1/5 - 向左切换 */}
+              <TouchableOpacity
+                style={styles.previewLeftZone}
+                onPress={handlePreviewPrev}
+                disabled={previewIndex === null || previewIndex <= 0}
+                activeOpacity={0.7}
+              />
+              {/* 中间3/5 - 关闭 */}
+              <TouchableOpacity
+                style={styles.previewMiddleZone}
+                onPress={handleClosePreview}
+                activeOpacity={1}
+              />
+              {/* 右侧1/5 - 向右切换 */}
+              <TouchableOpacity
+                style={styles.previewRightZone}
+                onPress={handlePreviewNext}
+                disabled={previewIndex === null || previewIndex >= flatGroupedImages.length - 1}
+                activeOpacity={0.7}
+              />
               {currentPreviewItem && (
                 <Image
                   source={{ uri: currentPreviewItem.uri }}
@@ -511,30 +509,12 @@ export function CustomGalleryPicker({
 
             {/* 底部按钮区域 */}
             <View style={styles.previewBottomArea}>
-              {/* 左侧切换按钮 */}
-              <TouchableOpacity
-                style={styles.previewArrowBtn}
-                onPress={handlePreviewPrev}
-                disabled={previewIndex === null || previewIndex <= 0}
-              >
-                <Text style={[styles.previewArrowText, (previewIndex === null || previewIndex <= 0) && styles.previewArrowDisabled]}>‹</Text>
-              </TouchableOpacity>
-
               {/* 中间指示器 */}
               <View style={styles.previewIndicator}>
                 <Text style={styles.previewIndicatorText}>
                   {flatGroupedImages.length > 0 ? (previewIndex ?? 0) + 1 : 0}/{flatGroupedImages.length}
                 </Text>
               </View>
-
-              {/* 右侧切换按钮 */}
-              <TouchableOpacity
-                style={styles.previewArrowBtn}
-                onPress={handlePreviewNext}
-                disabled={previewIndex === null || previewIndex >= flatGroupedImages.length - 1}
-              >
-                <Text style={[styles.previewArrowText, (previewIndex === null || previewIndex >= flatGroupedImages.length - 1) && styles.previewArrowDisabled]}>›</Text>
-              </TouchableOpacity>
 
               {/* 选择复选框 */}
               {currentPreviewItem && (
@@ -740,25 +720,35 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: '100%',
   },
+  previewLeftZone: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '20%',
+    zIndex: 10,
+  },
+  previewMiddleZone: {
+    position: 'absolute',
+    left: '20%',
+    top: 0,
+    bottom: 0,
+    width: '60%',
+    zIndex: 10,
+  },
+  previewRightZone: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '20%',
+    zIndex: 10,
+  },
   previewBottomArea: {
     height: 120,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  previewArrowBtn: {
-    width: 60,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewArrowText: {
-    color: '#fff',
-    fontSize: 50,
-    fontWeight: '300',
-  },
-  previewArrowDisabled: {
-    opacity: 0.3,
   },
   previewIndicator: {
     flex: 1,
