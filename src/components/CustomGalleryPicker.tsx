@@ -451,6 +451,7 @@ export function CustomGalleryPicker({
                 windowSize={5}
                 maxToRenderPerBatch={20}
                 initialNumToRender={50}
+                extraData={localSelectedSet.size}
               />
             )}
           </View>
