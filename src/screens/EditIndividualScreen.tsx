@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -62,6 +62,14 @@ export default function EditIndividualScreen() {
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryHasMore, setGalleryHasMore] = useState(false);
   const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
+
+  // 稳定的 existingUris - 避免每次渲染创建新数组
+  const stableExistingUris = useMemo(() => {
+    return [
+      ...allExistingUris,
+      ...recordImages.map(img => img.imagePath),
+    ];
+  }, [allExistingUris, recordImages]);
 
   // 弹窗视图模式
   const [groupPickerViewMode, setGroupPickerViewMode] = useState<'list' | 'grid'>('grid');
@@ -628,10 +636,7 @@ export default function EditIndividualScreen() {
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingUris={[
-          ...allExistingUris,
-          ...recordImages.map(img => img.imagePath),
-        ]}
+        existingUris={stableExistingUris}
         loading={galleryLoading}
         hasMore={galleryHasMore}
         onLoadMore={loadMoreGalleryImages}

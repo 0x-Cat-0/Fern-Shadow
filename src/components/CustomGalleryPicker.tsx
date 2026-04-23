@@ -362,16 +362,24 @@ export function CustomGalleryPicker({
   const isCurrentSelected = currentPreviewItem?.id ? localSelectedSet.has(currentPreviewItem.id) : false;
   const isAlreadyAddedForPreview = currentPreviewItem ? checkIsAlreadyAdded(currentPreviewItem.uri) : false;
 
-  const scrollViewRef = useRef<any>(null);
-
-  const handlePreviewScroll = useCallback((event: any) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    const newIndex = Math.round(offsetX / SCREEN_WIDTH);
-    if (newIndex !== previewIndex && newIndex >= 0 && newIndex < flatGroupedImages.length) {
+  // 预览按钮切换
+  const handlePreviewPrev = useCallback(() => {
+    if (previewIndex !== null && previewIndex > 0) {
+      const newIndex = previewIndex - 1;
       setPreviewIndex(newIndex);
       setPreviewItem(flatGroupedImages[newIndex]);
     }
   }, [previewIndex, flatGroupedImages]);
+
+  const handlePreviewNext = useCallback(() => {
+    if (previewIndex !== null && previewIndex < flatGroupedImages.length - 1) {
+      const newIndex = previewIndex + 1;
+      setPreviewIndex(newIndex);
+      setPreviewItem(flatGroupedImages[newIndex]);
+    }
+  }, [previewIndex, flatGroupedImages]);
+
+  const scrollViewRef = useRef<any>(null);
 
   // 计算可见项的 key
   const keyExtractor = useCallback((item: MediaLibrary.Asset, index: number) => {
@@ -475,60 +483,76 @@ export function CustomGalleryPicker({
           </View>
         </View>
 
-        {/* 全屏预览 */}
+        {/* 全屏预览 - 使用按钮切换 */}
         <Modal
           visible={previewIndex !== null}
           transparent
           animationType="fade"
           onRequestClose={handleClosePreview}
         >
-          <View style={styles.previewContainer} {...previewPanResponder.panHandlers}>
-            <TouchableOpacity style={styles.previewCloseBtn} onPress={handleClosePreview}>
-              <Text style={styles.previewCloseText}>×</Text>
+          <View style={styles.previewContainer}>
+            {/* 顶部关闭按钮 */}
+            <TouchableOpacity style={styles.previewTopArea} onPress={handleClosePreview}>
+              <TouchableOpacity style={styles.previewCloseBtn} onPress={handleClosePreview}>
+                <Text style={styles.previewCloseText}>×</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
 
-            <ScrollView
-              ref={scrollViewRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={handlePreviewScroll}
-              scrollEventThrottle={16}
-              style={styles.previewScrollView}
-              contentContainerStyle={styles.previewScrollContent}
-            >
-              {flatGroupedImages.map((image: MediaLibrary.Asset, index: number) => (
-                <View key={image.id ?? `${image.uri}-${index}`} style={styles.previewImageWrapper}>
-                  <Image
-                    source={{ uri: image.uri }}
-                    style={styles.previewImage}
-                    resizeMode="contain"
-                  />
-                </View>
-              ))}
-            </ScrollView>
-
-            <View style={styles.previewIndicator}>
-              <Text style={styles.previewIndicatorText}>
-                {flatGroupedImages.length > 0 ? (previewIndex ?? 0) + 1 : 0}/{flatGroupedImages.length}
-              </Text>
+            {/* 中间图片区域 */}
+            <View style={styles.previewImageContainer}>
+              {currentPreviewItem && (
+                <Image
+                  source={{ uri: currentPreviewItem.uri }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              )}
             </View>
 
-            {currentPreviewItem && (
+            {/* 底部按钮区域 */}
+            <View style={styles.previewBottomArea}>
+              {/* 左侧切换按钮 */}
               <TouchableOpacity
-                style={[
-                  styles.previewCheckbox,
-                  {
-                    backgroundColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.3)',
-                    borderColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.5)',
-                  }
-                ]}
-                onPress={() => handleCheckboxPress(currentPreviewItem)}
-                activeOpacity={1}
+                style={styles.previewArrowBtn}
+                onPress={handlePreviewPrev}
+                disabled={previewIndex === null || previewIndex <= 0}
               >
-                <Text style={[styles.previewCheckboxText, { opacity: (isCurrentSelected || isAlreadyAddedForPreview) ? 1 : 0 }]}>✓</Text>
+                <Text style={[styles.previewArrowText, (previewIndex === null || previewIndex <= 0) && styles.previewArrowDisabled]}>‹</Text>
               </TouchableOpacity>
-            )}
+
+              {/* 中间指示器 */}
+              <View style={styles.previewIndicator}>
+                <Text style={styles.previewIndicatorText}>
+                  {flatGroupedImages.length > 0 ? (previewIndex ?? 0) + 1 : 0}/{flatGroupedImages.length}
+                </Text>
+              </View>
+
+              {/* 右侧切换按钮 */}
+              <TouchableOpacity
+                style={styles.previewArrowBtn}
+                onPress={handlePreviewNext}
+                disabled={previewIndex === null || previewIndex >= flatGroupedImages.length - 1}
+              >
+                <Text style={[styles.previewArrowText, (previewIndex === null || previewIndex >= flatGroupedImages.length - 1) && styles.previewArrowDisabled]}>›</Text>
+              </TouchableOpacity>
+
+              {/* 选择复选框 */}
+              {currentPreviewItem && (
+                <TouchableOpacity
+                  style={[
+                    styles.previewCheckbox,
+                    {
+                      backgroundColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.3)',
+                      borderColor: isCurrentSelected ? '#2196F3' : isAlreadyAddedForPreview ? '#888888' : 'rgba(255,255,255,0.5)',
+                    }
+                  ]}
+                  onPress={() => handleCheckboxPress(currentPreviewItem)}
+                  activeOpacity={1}
+                >
+                  <Text style={[styles.previewCheckboxText, { opacity: (isCurrentSelected || isAlreadyAddedForPreview) ? 1 : 0 }]}>✓</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </Modal>
       </View>
@@ -700,27 +724,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
   },
-  previewScrollView: {
+  previewTopArea: {
+    height: 100,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingTop: 50,
+    paddingRight: 10,
+  },
+  previewImageContainer: {
     flex: 1,
-  },
-  previewScrollContent: {
-    flexDirection: 'row',
-  },
-  previewImageWrapper: {
-    width: SCREEN_WIDTH,
-    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   previewImage: {
     width: SCREEN_WIDTH,
-    height: '80%',
+    height: '100%',
+  },
+  previewBottomArea: {
+    height: 120,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewArrowBtn: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewArrowText: {
+    color: '#fff',
+    fontSize: 50,
+    fontWeight: '300',
+  },
+  previewArrowDisabled: {
+    opacity: 0.3,
+  },
+  previewIndicator: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  previewIndicatorText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
   },
   previewCloseBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -731,19 +779,9 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '300',
   },
-  previewIndicator: {
-    position: 'absolute',
-    bottom: 120,
-    alignSelf: 'center',
-    zIndex: 10,
-  },
-  previewIndicatorText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-  },
   previewCheckbox: {
     position: 'absolute',
-    bottom: 50,
+    bottom: 35,
     right: 20,
     zIndex: 10,
     width: 44,

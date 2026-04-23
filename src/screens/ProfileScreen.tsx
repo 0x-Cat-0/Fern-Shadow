@@ -157,7 +157,7 @@ export default function ProfileScreen({ onHelpPress, onAboutPress }: Props) {
 
         {/* 版本信息 */}
         <View style={styles.versionSection}>
-          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.3.24</Text>
+          <Text style={[styles.versionText, { color: colors.textDisabled }]}>版本 1.3.25</Text>
         </View>
       </ScrollView>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -60,6 +60,14 @@ export default function CreateIndividualScreen() {
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryHasMore, setGalleryHasMore] = useState(false);
   const [galleryCursor, setGalleryCursor] = useState<string | null>(null);
+
+  // 稳定的 existingUris - 避免每次渲染创建新数组
+  const stableExistingUris = useMemo(() => {
+    return [
+      ...allExistingUris,
+      ...selectedImages.map(img => img.uri),
+    ];
+  }, [allExistingUris, selectedImages]);
 
   // 图片来源选择弹窗状态
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
@@ -500,10 +508,7 @@ export default function CreateIndividualScreen() {
         visible={showCustomGallery}
         images={galleryImages}
         selectedIds={gallerySelectedIds}
-        existingUris={[
-          ...allExistingUris,
-          ...selectedImages.map(img => img.uri),
-        ]}
+        existingUris={stableExistingUris}
         loading={galleryLoading}
         hasMore={galleryHasMore}
         onLoadMore={loadMoreGalleryImages}
