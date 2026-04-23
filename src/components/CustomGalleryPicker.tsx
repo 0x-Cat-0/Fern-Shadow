@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,13 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
+  SectionList,
   ScrollView,
   Dimensions,
   Switch,
   PanResponder,
   useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as MediaLibrary from 'expo-media-library';
 import { useTheme } from '../hooks/useTheme';
 
@@ -36,11 +36,24 @@ interface GalleryImageItemProps {
   item: MediaLibrary.Asset;
   isSelected: boolean;
   isAlreadyAdded: boolean;
-  onImagePress: () => void;
+  onImagePress: (img: MediaLibrary.Asset) => void;
   onCheckboxPress: () => void;
-  onLongPress: () => void;
   colors: any;
 }
+
+const MemoizedGalleryImageItem = React.memo(GalleryImageItem);
+
+// 预定义样式
+const checkboxBaseStyle = {
+  position: 'absolute' as const,
+  bottom: 6,
+  right: 6,
+  width: 22,
+  height: 22,
+  borderRadius: 11,
+  justifyContent: 'center' as const,
+  alignItems: 'center' as const,
+};
 
 function GalleryImageItem({
   item,
@@ -48,20 +61,19 @@ function GalleryImageItem({
   isAlreadyAdded,
   onImagePress,
   onCheckboxPress,
-  onLongPress,
   colors,
 }: GalleryImageItemProps) {
-  // 已添加但未选中：显示灰色对号
   const showGrayCheck = isAlreadyAdded && !isSelected;
-  // 选中状态：显示蓝色对号
   const showBlueCheck = isSelected;
+  const checkboxBgColor = showBlueCheck ? '#2196F3' : showGrayCheck ? '#888888' : 'rgba(255,255,255,0.85)';
+  const hasBorder = !isSelected;
+  const checkmarkOpacity = (showBlueCheck || showGrayCheck) ? 1 : 0;
 
   return (
     <View style={styles.gridItem}>
       <TouchableOpacity
         style={styles.imageTouchable}
-        onPress={onImagePress}
-        onLongPress={onLongPress}
+        onPress={() => onImagePress(item)}
         delayLongPress={500}
         activeOpacity={0.9}
       >
@@ -74,15 +86,15 @@ function GalleryImageItem({
       </TouchableOpacity>
       <TouchableOpacity
         style={[
-          styles.checkbox,
-          showBlueCheck ? { backgroundColor: '#2196F3' } :
-          showGrayCheck ? { backgroundColor: '#888888' } : { backgroundColor: 'rgba(255,255,255,0.85)' },
-          !isSelected && { borderColor: '#ddd', borderWidth: 2 },
+          checkboxBaseStyle,
+          { backgroundColor: checkboxBgColor },
+          hasBorder && { borderColor: '#ddd', borderWidth: 2 },
         ]}
         onPress={onCheckboxPress}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        activeOpacity={1}
       >
-        <Text style={[styles.checkmarkWhite, { opacity: (showBlueCheck || showGrayCheck) ? 1 : 0 }]}>✓</Text>
+        <Text style={[styles.checkmarkWhite, { opacity: checkmarkOpacity }]}>✓</Text>
       </TouchableOpacity>
     </View>
   );
@@ -101,6 +113,12 @@ interface CustomGalleryPickerProps {
   onToggleSelection: (asset: MediaLibrary.Asset) => void;
 }
 
+// SectionList 的 section 类型
+interface Section {
+  title: string;
+  data: MediaLibrary.Asset[];
+}
+
 export function CustomGalleryPicker({
   visible,
   images,
@@ -114,11 +132,18 @@ export function CustomGalleryPicker({
   onToggleSelection,
 }: CustomGalleryPickerProps) {
   const colors = useTheme();
-  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [hideAlreadyAdded, setHideAlreadyAdded] = useState(true);
   const [isSelecting, setIsSelecting] = useState(false);
+
+  // 使用 Set 存储选中 ID
+  const [localSelectedSet, setLocalSelectedSet] = useState<Set<string>>(new Set());
+
+  // 同步外部 selectedIds 到本地 Set
+  useEffect(() => {
+    setLocalSelectedSet(new Set(selectedIds));
+  }, [selectedIds]);
 
   const [sheetHeight, setSheetHeight] = useState(screenHeight * 0.8);
   const minHeight = screenHeight * 0.4;
@@ -133,11 +158,8 @@ export function CustomGalleryPicker({
       onPanResponderGrant: (evt) => {
         const { pageY } = evt.nativeEvent;
         const screenH = SCREEN_HEIGHT;
-        // 顶部按钮区域 (y < 100)
         if (pageY < 100) return;
-        // 底部按钮区域 (y > screenH - 120)
         if (pageY > screenH - 120) return;
-        // 中间区域，关闭预览
         handleClosePreview();
       },
     })
@@ -158,60 +180,59 @@ export function CustomGalleryPicker({
     })
   ).current;
 
-  const normalizedExisting = useMemo(() => existingUris.map(normalizeUri), [existingUris]);
+  // 使用 Set 进行 O(1) 查找
+  const normalizedExistingSet = useMemo(() => new Set(existingUris.map(normalizeUri)), [existingUris]);
 
-  // 检查图片是否已添加（数据库中已存在）
   const checkIsAlreadyAdded = useCallback((uri: string) => {
-    const normalizedUri = normalizeUri(uri);
-    return normalizedExisting.includes(normalizedUri);
-  }, [normalizedExisting]);
+    return normalizedExistingSet.has(normalizeUri(uri));
+  }, [normalizedExistingSet]);
 
   const handleConfirm = useCallback(() => {
-    if (selectedIds.length === 0) return;
-    const selected = images.filter(img => img.id && selectedIds.includes(img.id));
+    if (localSelectedSet.size === 0) return;
+    const selected = images.filter(img => img.id && localSelectedSet.has(img.id));
     onConfirm(selected);
-  }, [selectedIds, images, onConfirm]);
+  }, [localSelectedSet, images, onConfirm]);
 
-  const handleImagePress = useCallback((index: number) => {
-    setPreviewIndex(index);
-  }, []);
-
+  // 点击复选框
   const handleCheckboxPress = useCallback((item: MediaLibrary.Asset) => {
-    onToggleSelection(item);
+    if (!item.id) return;
+
+    setLocalSelectedSet(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(item.id)) {
+        newSet.delete(item.id);
+      } else {
+        newSet.add(item.id);
+      }
+      return newSet;
+    });
+
+    requestAnimationFrame(() => {
+      onToggleSelection(item);
+    });
   }, [onToggleSelection]);
 
+  // 长按选择
   const handleLongPress = useCallback((item: MediaLibrary.Asset) => {
-    if (item.id && !selectedIds.includes(item.id)) {
-      onToggleSelection(item);
+    if (item.id && !localSelectedSet.has(item.id)) {
+      setLocalSelectedSet(prev => new Set(prev).add(item.id));
+      requestAnimationFrame(() => {
+        onToggleSelection(item);
+      });
     }
     setIsSelecting(true);
-  }, [selectedIds, onToggleSelection]);
+  }, [localSelectedSet, onToggleSelection]);
+
+  // 预览当前图片
+  const [previewItem, setPreviewItem] = useState<MediaLibrary.Asset | null>(null);
 
   const handleClosePreview = useCallback(() => {
     setPreviewIndex(null);
+    setPreviewItem(null);
   }, []);
 
-  const handleEndReached = useCallback(() => {
-    if (!loading && hasMore) {
-      onLoadMore();
-    }
-  }, [loading, hasMore, onLoadMore]);
-
-  const renderFooter = () => {
-    if (!hasMore) return null;
-    return (
-      <TouchableOpacity style={styles.loadMoreBtn} onPress={onLoadMore} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Text style={[styles.loadMoreText, { color: colors.primary }]}>加载更多</Text>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  // 格式化日期为显示字符串
-  const formatDateHeader = (timestamp: number): string => {
+  // 格式化日期
+  const formatDateHeader = useCallback((timestamp: number): string => {
     const date = new Date(timestamp);
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -223,21 +244,18 @@ export function CustomGalleryPicker({
     } else if (imageDate.getTime() === yesterday.getTime()) {
       return '昨天';
     } else {
-      return `${date.getMonth() + 1}月${date.getDate()}日`;
+      return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
     }
-  };
+  }, []);
 
-  // 按日期分组 - 考虑 hideAlreadyAdded 过滤
-  const groupedImages = useMemo(() => {
-    // 先过滤：隐藏已添加的图片，但保留当前会话已选择的
+  // 将图片转换为 SectionList 需要的 section 格式
+  const sections = useMemo((): Section[] => {
     let filtered = images;
     if (hideAlreadyAdded) {
       filtered = images.filter(img => {
-        // 如果图片已选择（在当前会话中），保留显示
-        if (img.id && selectedIds.includes(img.id)) {
+        if (img.id && localSelectedSet.has(img.id)) {
           return true;
         }
-        // 否则检查是否已在数据库中存在
         return !checkIsAlreadyAdded(img.uri);
       });
     }
@@ -261,27 +279,56 @@ export function CustomGalleryPicker({
     if (currentGroup && currentGroup.data.length > 0) {
       groups.push(currentGroup);
     }
-    return groups;
-  }, [images, hideAlreadyAdded, checkIsAlreadyAdded, selectedIds]);
 
-  // 渲染一行图片网格（最多4列）
-  const renderImageRow = (rowImages: MediaLibrary.Asset[], rowIndex: number, sectionIndex: number) => {
+    return groups.map(g => ({ title: g.date, data: g.data }));
+  }, [images, hideAlreadyAdded, checkIsAlreadyAdded, localSelectedSet, formatDateHeader]);
+
+  // 展平分组图片为一维数组（用于预览）
+  const flatGroupedImages = useMemo(() => {
+    const result: MediaLibrary.Asset[] = [];
+    sections.forEach(section => {
+      result.push(...section.data);
+    });
+    return result;
+  }, [sections]);
+
+  const handleImagePress = useCallback((img: MediaLibrary.Asset) => {
+    const index = flatGroupedImages.findIndex(i => i.id === img.id);
+    if (index >= 0) {
+      setPreviewIndex(index);
+      setPreviewItem(img);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: false });
+      }, 0);
+    }
+  }, [flatGroupedImages]);
+
+  // 渲染一行图片（每行4张）
+  const renderRow = useCallback(({ item, index, section }: { item: MediaLibrary.Asset; index: number; section: Section }) => {
+    // SectionList 会为每个 item 调用一次 renderItem
+    // 只在每行的第一项时渲染整行
+    const isFirstInRow = index % NUM_COLUMNS === 0;
+    if (!isFirstInRow) {
+      return null;
+    }
+
+    const rowStartIndex = index;
+    const rowImages = section.data.slice(rowStartIndex, rowStartIndex + NUM_COLUMNS);
+
     return (
-      <View key={`row-${sectionIndex}-${rowIndex}`} style={styles.gridRow}>
+      <View style={styles.gridRow}>
         {rowImages.map((img, idx) => {
-          const isSelected = img.id ? selectedIds.includes(img.id) : false;
+          const isSelected = img.id ? localSelectedSet.has(img.id) : false;
           const isAlreadyAdded = checkIsAlreadyAdded(img.uri);
-          const globalIndex = images.indexOf(img);
 
           return (
-            <GalleryImageItem
-              key={img.id || String(img.uri) + idx}
+            <MemoizedGalleryImageItem
+              key={img.id ?? `${img.uri}-${idx}`}
               item={img}
               isSelected={isSelected}
               isAlreadyAdded={isAlreadyAdded}
-              onImagePress={() => handleImagePress(globalIndex)}
+              onImagePress={() => handleImagePress(img)}
               onCheckboxPress={() => handleCheckboxPress(img)}
-              onLongPress={() => handleLongPress(img)}
               colors={colors}
             />
           );
@@ -292,40 +339,44 @@ export function CustomGalleryPicker({
         ))}
       </View>
     );
-  };
+  }, [localSelectedSet, checkIsAlreadyAdded, handleImagePress, handleCheckboxPress, colors]);
 
-  // 渲染整个分组列表
-  const renderGroupedList = () => {
-    return groupedImages.map((group, sectionIndex) => (
-      <View key={`section-${sectionIndex}`}>
-        <View style={styles.dateHeader}>
-          <Text style={styles.dateHeaderText}>{group.date}</Text>
-        </View>
-        <View style={styles.gridContent}>
-          {Array.from({ length: Math.ceil(group.data.length / NUM_COLUMNS) }).map((_, rowIndex) => {
-            const startIdx = rowIndex * NUM_COLUMNS;
-            const rowImages = group.data.slice(startIdx, startIdx + NUM_COLUMNS);
-            return renderImageRow(rowImages, rowIndex, sectionIndex);
-          })}
-        </View>
+  // 渲染 section header
+  const renderSectionHeader = useCallback(({ section }: { section: Section }) => {
+    return (
+      <View style={styles.dateHeader}>
+        <Text style={styles.dateHeaderText}>{section.title}</Text>
       </View>
-    ));
-  };
+    );
+  }, []);
 
-  const currentPreviewItem = previewIndex !== null ? images[previewIndex] : null;
-  const isCurrentSelected = currentPreviewItem?.id ? selectedIds.includes(currentPreviewItem.id) : false;
+  // 加载更多检测
+  const handleEndReached = useCallback(() => {
+    if (!loading && hasMore) {
+      onLoadMore();
+    }
+  }, [loading, hasMore, onLoadMore]);
+
+  // 预览相关
+  const currentPreviewItem = previewItem;
+  const isCurrentSelected = currentPreviewItem?.id ? localSelectedSet.has(currentPreviewItem.id) : false;
   const isAlreadyAddedForPreview = currentPreviewItem ? checkIsAlreadyAdded(currentPreviewItem.uri) : false;
 
-  // 预览页面的处理
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
 
-  const handlePreviewScroll = (event: any) => {
+  const handlePreviewScroll = useCallback((event: any) => {
     const offsetX = event.nativeEvent.contentOffset.x;
     const newIndex = Math.round(offsetX / SCREEN_WIDTH);
-    if (newIndex !== previewIndex && newIndex >= 0 && newIndex < images.length) {
+    if (newIndex !== previewIndex && newIndex >= 0 && newIndex < flatGroupedImages.length) {
       setPreviewIndex(newIndex);
+      setPreviewItem(flatGroupedImages[newIndex]);
     }
-  };
+  }, [previewIndex, flatGroupedImages]);
+
+  // 计算可见项的 key
+  const keyExtractor = useCallback((item: MediaLibrary.Asset, index: number) => {
+    return item.id ?? `${item.uri}-${index}`;
+  }, []);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -347,7 +398,7 @@ export function CustomGalleryPicker({
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>
-                已选 {selectedIds.length} 项
+                已选 {localSelectedSet.size} 项
               </Text>
             </View>
             <View style={styles.headerRight}>
@@ -372,48 +423,58 @@ export function CustomGalleryPicker({
               <View style={styles.loading}>
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>
-            ) : groupedImages.length === 0 ? (
+            ) : sections.length === 0 ? (
               <View style={styles.empty}>
                 <Text style={{ color: colors.textSecondary }}>没有可选择的图片</Text>
               </View>
             ) : (
-              <ScrollView
-                contentContainerStyle={{ paddingBottom: 16 }}
-                onScroll={(e) => {
-                  const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-                  if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 100) {
-                    handleEndReached();
-                  }
+              <SectionList
+                sections={sections}
+                keyExtractor={keyExtractor}
+                renderItem={renderRow}
+                renderSectionHeader={renderSectionHeader}
+                stickySectionHeadersEnabled={false}
+                onEndReached={handleEndReached}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={
+                  loading && hasMore ? (
+                    <View style={styles.loadMoreLoading}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    </View>
+                  ) : null
+                }
+                contentContainerStyle={{
+                  paddingHorizontal: PADDING_HORIZONTAL,
+                  paddingBottom: 16,
                 }}
-                scrollEventThrottle={100}
-                showsVerticalScrollIndicator={false}
-              >
-                {renderGroupedList()}
-                {renderFooter()}
-              </ScrollView>
+                style={styles.sectionList}
+                windowSize={5}
+                maxToRenderPerBatch={20}
+                initialNumToRender={50}
+              />
             )}
           </View>
 
           <View style={[styles.bottomBar, { borderTopColor: colors.border }]}>
             <View style={styles.previewInfo}>
               <Text style={[styles.previewText, { color: colors.primary }]}>
-                预览 {selectedIds.length}
+                预览 {localSelectedSet.size}
               </Text>
             </View>
             <TouchableOpacity
               style={[
                 styles.confirmBtn,
-                { backgroundColor: selectedIds.length > 0 ? colors.primary : colors.border }
+                { backgroundColor: localSelectedSet.size > 0 ? colors.primary : colors.border }
               ]}
               onPress={handleConfirm}
-              disabled={selectedIds.length === 0}
+              disabled={localSelectedSet.size === 0}
             >
               <Text style={styles.confirmBtnText}>确认</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 全屏预览 - 可左右滑动 */}
+        {/* 全屏预览 */}
         <Modal
           visible={previewIndex !== null}
           transparent
@@ -421,12 +482,10 @@ export function CustomGalleryPicker({
           onRequestClose={handleClosePreview}
         >
           <View style={styles.previewContainer} {...previewPanResponder.panHandlers}>
-            {/* 关闭按钮 */}
             <TouchableOpacity style={styles.previewCloseBtn} onPress={handleClosePreview}>
               <Text style={styles.previewCloseText}>×</Text>
             </TouchableOpacity>
 
-            {/* 可滑动的图片 */}
             <ScrollView
               ref={scrollViewRef}
               horizontal
@@ -437,8 +496,8 @@ export function CustomGalleryPicker({
               style={styles.previewScrollView}
               contentContainerStyle={styles.previewScrollContent}
             >
-              {images.map((image: MediaLibrary.Asset, index: number) => (
-                <View key={image.id || String(image.uri) + index} style={styles.previewImageWrapper}>
+              {flatGroupedImages.map((image: MediaLibrary.Asset, index: number) => (
+                <View key={image.id ?? `${image.uri}-${index}`} style={styles.previewImageWrapper}>
                   <Image
                     source={{ uri: image.uri }}
                     style={styles.previewImage}
@@ -448,19 +507,12 @@ export function CustomGalleryPicker({
               ))}
             </ScrollView>
 
-            {/* 关闭按钮 */}
-            <TouchableOpacity style={styles.previewCloseBtn} onPress={handleClosePreview}>
-              <Text style={styles.previewCloseText}>×</Text>
-            </TouchableOpacity>
-
-            {/* 页码指示器 */}
             <View style={styles.previewIndicator}>
               <Text style={styles.previewIndicatorText}>
-                {images.length > 0 ? (previewIndex ?? 0) + 1 : 0}/{images.length}
+                {flatGroupedImages.length > 0 ? (previewIndex ?? 0) + 1 : 0}/{flatGroupedImages.length}
               </Text>
             </View>
 
-            {/* 右下角选择圆点 - 蓝色选中，灰色已添加 */}
             {currentPreviewItem && (
               <TouchableOpacity
                 style={[
@@ -471,8 +523,9 @@ export function CustomGalleryPicker({
                   }
                 ]}
                 onPress={() => handleCheckboxPress(currentPreviewItem)}
+                activeOpacity={1}
               >
-                                <Text style={[styles.previewCheckboxText, { opacity: (isCurrentSelected || isAlreadyAddedForPreview) ? 1 : 0 }]}>✓</Text>
+                <Text style={[styles.previewCheckboxText, { opacity: (isCurrentSelected || isAlreadyAddedForPreview) ? 1 : 0 }]}>✓</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -560,6 +613,9 @@ const styles = StyleSheet.create({
   gridContainer: {
     flex: 1,
   },
+  sectionList: {
+    flex: 1,
+  },
   gridContent: {
     paddingHorizontal: PADDING_HORIZONTAL,
   },
@@ -572,6 +628,7 @@ const styles = StyleSheet.create({
   gridItem: {
     width: IMAGE_SIZE,
     height: IMAGE_SIZE,
+    overflow: 'hidden',
   },
   imageTouchable: {
     width: '100%',
@@ -581,16 +638,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#f0f0f0',
-  },
-  checkbox: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   checkmarkWhite: {
     color: '#fff',
@@ -617,14 +664,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadMoreBtn: {
-    paddingVertical: 20,
+  loadMoreLoading: {
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  loadMoreText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
   bottomBar: {
     flexDirection: 'row',
@@ -656,13 +699,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
   },
-  previewBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
-  },
   previewScrollView: {
     flex: 1,
-    zIndex: 2,
   },
   previewScrollContent: {
     flexDirection: 'row',

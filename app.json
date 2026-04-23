@@ -2,7 +2,7 @@
   "expo": {
     "name": "蕨影",
     "slug": "fern-shadow",
-    "version": "1.3.14",
+    "version": "1.3.24",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/icon.png",

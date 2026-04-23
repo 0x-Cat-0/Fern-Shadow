@@ -416,7 +416,7 @@ export default function IndividualDetailScreen() {
       // 使用 MediaLibrary 获取图片（分页加载，每页500张）
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        first: 500,
+        first: 100,
         sortBy: ['creationTime'],
       });
 
@@ -440,7 +440,7 @@ export default function IndividualDetailScreen() {
       setGalleryLoading(true);
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        first: 500,
+        first: 100,
         after: galleryCursor,
         sortBy: ['creationTime'],
       });

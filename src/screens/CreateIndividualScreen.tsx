@@ -214,7 +214,7 @@ export default function CreateIndividualScreen() {
 
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        first: 500,
+        first: 100,
         sortBy: ['creationTime'],
       });
 
@@ -237,7 +237,7 @@ export default function CreateIndividualScreen() {
       setGalleryLoading(true);
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'photo',
-        first: 500,
+        first: 100,
         after: galleryCursor,
         sortBy: ['creationTime'],
       });
