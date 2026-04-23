@@ -16,7 +16,7 @@ import {
 import * as MediaLibrary from 'expo-media-library';
 import { useTheme } from '../hooks/useTheme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NUM_COLUMNS = 4;
 const GRID_GAP = 8;
 const PADDING_HORIZONTAL = 16;
@@ -194,17 +194,6 @@ export function CustomGalleryPicker({
       onToggleSelection(item);
     });
   }, [onToggleSelection]);
-
-  // 长按选择
-  const handleLongPress = useCallback((item: MediaLibrary.Asset) => {
-    if (item.id && !localSelectedSet.has(item.id)) {
-      setLocalSelectedSet(prev => new Set(prev).add(item.id));
-      requestAnimationFrame(() => {
-        onToggleSelection(item);
-      });
-    }
-    setIsSelecting(true);
-  }, [localSelectedSet, onToggleSelection]);
 
   // 预览当前图片
   const [previewItem, setPreviewItem] = useState<MediaLibrary.Asset | null>(null);
@@ -620,9 +609,6 @@ const styles = StyleSheet.create({
   },
   sectionList: {
     flex: 1,
-  },
-  gridContent: {
-    paddingHorizontal: PADDING_HORIZONTAL,
   },
   gridRow: {
     flexDirection: 'row',
